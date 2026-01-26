@@ -1,5 +1,0 @@
-USE doctor_appointment;
-
-
-
-
