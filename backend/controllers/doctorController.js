@@ -1,5 +1,6 @@
 const { getDB } = require('../config/mysql');
 
+// Get all doctors
 const getAllDoctors = async (req, res) => {
   try {
     const db = getDB();
@@ -26,6 +27,7 @@ const getAllDoctors = async (req, res) => {
 
     const params = [];
 
+    // Check if speciality filter is provided
     if (speciality) {
       query += ' AND s.name = ?';
       params.push(speciality);
@@ -33,6 +35,7 @@ const getAllDoctors = async (req, res) => {
 
     const [doctors] = await db.query(query, params);
 
+    // Match frontend structure
     const transformedDoctors = doctors.map((doc) => ({
       _id: doc.id.toString(),
       name: doc.name,
@@ -64,6 +67,7 @@ const getAllDoctors = async (req, res) => {
   }
 };
 
+// Get doctor by ID
 const getDoctorById = async (req, res) => {
   try {
     const db = getDB();
@@ -99,6 +103,7 @@ const getDoctorById = async (req, res) => {
 
     const doc = doctors[0];
 
+    // Match frontend structure
     const transformedDoctor = {
       _id: doc.id.toString(),
       name: doc.name,

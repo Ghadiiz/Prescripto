@@ -4,6 +4,7 @@ require('dotenv').config();
 const { connectCloudinary } = require('./config/cloudinary');
 const { connectDB } = require('./config/mysql');
 const doctorRoutes = require('./routes/doctorRoutes');
+const specialityRoutes = require('./routes/specialityRoutes');
 
 const app = express();
 
@@ -20,6 +21,7 @@ app.get('/', (req, res) => {
 });
 
 app.use('/api/doctors', doctorRoutes);
+app.use('/api/specialities', specialityRoutes);
 
 app.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}...`);
