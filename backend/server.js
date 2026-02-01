@@ -6,6 +6,7 @@ import { connectCloudinary } from './src/config/cloudinary.js';
 import authRoutes from './src/auth/routes/authRoutes.js';
 import doctorRoutes from './src/doctors/routes/doctorRoutes.js';
 import appointmentRoutes from './src/appointments/routes/appointmentRoutes.js';
+import adminRoutes from './src/admin/routes/adminRoutes.js';
 
 dotenv.config();
 
@@ -25,6 +26,7 @@ app.get('/', (req, res) => {
 app.use('/api/auth', authRoutes);
 app.use('/api/doctors', doctorRoutes);
 app.use('/api/appointments', appointmentRoutes);
+app.use('/api/admin', adminRoutes);
 
 app.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}...`);

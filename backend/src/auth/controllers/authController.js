@@ -2,16 +2,36 @@ import * as authService from '../services/authService.js';
 
 export const registerUser = async (req, res) => {
   try {
-    const { name, email, password } = req.body;
+    const {
+      name,
+      email,
+      password,
+      phone,
+      address_line1,
+      address_line2,
+      gender,
+      dob,
+    } = req.body;
 
     if (!name || !email || !password) {
       return res.status(400).json({
         success: false,
-        message: 'All fields are required',
+        message: 'Name, email, and password are required',
       });
     }
 
-    const result = await authService.registerUserService(name, email, password);
+    const userData = {
+      name,
+      email,
+      password,
+      phone: phone || null,
+      address_line1: address_line1 || null,
+      address_line2: address_line2 || null,
+      gender: gender || null,
+      dob: dob || null,
+    };
+
+    const result = await authService.registerUserService(userData);
 
     res.status(201).json({
       success: true,
