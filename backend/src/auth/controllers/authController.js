@@ -118,3 +118,37 @@ export const updateUserProfile = async (req, res) => {
     });
   }
 };
+
+export const uploadProfileImage = async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({
+        success: false,
+        message: 'No image file provided',
+      });
+    }
+
+    const user = await authService.uploadUserProfileImageService(
+      req.userId,
+      req.file,
+    );
+
+    res.status(200).json({
+      success: true,
+      message: 'Profile image uploaded successfully',
+      user,
+    });
+  } catch (error) {
+    if (error.message === 'NO_IMAGE_FILE') {
+      return res.status(400).json({
+        success: false,
+        message: 'No image file provided',
+      });
+    }
+
+    res.status(500).json({
+      success: false,
+      message: 'Failed to upload image',
+    });
+  }
+};

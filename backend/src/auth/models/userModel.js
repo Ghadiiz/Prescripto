@@ -34,3 +34,12 @@ export const updateUser = async (userId, updates, values) => {
   ]);
   return findUserById(userId);
 };
+
+export const updateUserImage = async (userId, imageUrl) => {
+  const db = getDB();
+  const [result] = await db.query('UPDATE users SET image = ? WHERE id = ?', [
+    imageUrl,
+    userId,
+  ]);
+  return result.affectedRows > 0;
+};

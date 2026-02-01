@@ -1,6 +1,7 @@
 import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
 import * as userModel from '../models/userModel.js';
+import cloudinary from '../../config/cloudinary.js';
 
 export const registerUserService = async (name, email, password) => {
   const existingUser = await userModel.findUserByEmail(email);
@@ -97,6 +98,36 @@ export const updateUserProfileService = async (userId, data) => {
   }
 
   const user = await userModel.updateUser(userId, updates, values);
+
+  return {
+    _id: user.id.toString(),
+    name: user.name,
+    email: user.email,
+    phone: user.phone,
+    address: {
+      line1: user.address_line1,
+      line2: user.address_line2,
+    },
+    gender: user.gender,
+    dob: user.dob,
+    image: user.image,
+  };
+};
+
+export const uploadUserProfileImageService = async (userId, file) => {
+  if (!file) {
+    throw new Error('NO_IMAGE_FILE');
+  }
+
+  const imageUpload = await cloudinary.uploader.upload(file.path, {
+    resource_type: 'image',
+  });
+
+  const imageUrl = imageUpload.secure_url;
+
+  await userModel.updateUserImage(userId, imageUrl);
+
+  const user = await userModel.findUserById(userId);
 
   return {
     _id: user.id.toString(),
