@@ -1,41 +1,10 @@
-const { getDB } = require('../config/mysql');
+import * as doctorModel from '../models/doctorModel.js';
 
-// Get all doctors
-const getAllDoctors = async (req, res) => {
+export const getAllDoctors = async (req, res) => {
   try {
-    const db = getDB();
     const { speciality } = req.query;
+    const doctors = await doctorModel.getAllDoctors(speciality);
 
-    let query = `
-      SELECT 
-        d.id,
-        d.name,
-        d.email,
-        d.image,
-        s.name AS speciality,
-        d.degree,
-        d.experience,
-        d.about,
-        d.fees,
-        d.address_line1,
-        d.address_line2,
-        d.available
-      FROM doctors d
-      JOIN specialities s ON d.speciality_id = s.id
-      WHERE d.available = true
-    `;
-
-    const params = [];
-
-    // Check if speciality filter is provided
-    if (speciality) {
-      query += ' AND s.name = ?';
-      params.push(speciality);
-    }
-
-    const [doctors] = await db.query(query, params);
-
-    // Match frontend structure
     const transformedDoctors = doctors.map((doc) => ({
       _id: doc.id.toString(),
       name: doc.name,
@@ -56,7 +25,7 @@ const getAllDoctors = async (req, res) => {
     res.status(200).json({
       success: true,
       count: transformedDoctors.length,
-      data: transformedDoctors,
+      doctors: transformedDoctors,
     });
   } catch (error) {
     console.error('Error fetching doctors:', error);
@@ -67,43 +36,18 @@ const getAllDoctors = async (req, res) => {
   }
 };
 
-// Get doctor by ID
-const getDoctorById = async (req, res) => {
+export const getDoctorById = async (req, res) => {
   try {
-    const db = getDB();
     const { id } = req.params;
+    const doc = await doctorModel.getDoctorById(id);
 
-    const query = `
-      SELECT 
-        d.id,
-        d.name,
-        d.email,
-        d.image,
-        s.name AS speciality,
-        d.degree,
-        d.experience,
-        d.about,
-        d.fees,
-        d.address_line1,
-        d.address_line2,
-        d.available
-      FROM doctors d
-      JOIN specialities s ON d.speciality_id = s.id
-      WHERE d.id = ?
-    `;
-
-    const [doctors] = await db.query(query, [id]);
-
-    if (doctors.length === 0) {
+    if (!doc) {
       return res.status(404).json({
         success: false,
         message: 'Doctor not found',
       });
     }
 
-    const doc = doctors[0];
-
-    // Match frontend structure
     const transformedDoctor = {
       _id: doc.id.toString(),
       name: doc.name,
@@ -123,7 +67,7 @@ const getDoctorById = async (req, res) => {
 
     res.status(200).json({
       success: true,
-      data: transformedDoctor,
+      doctor: transformedDoctor,
     });
   } catch (error) {
     console.error('Error fetching doctor:', error);
@@ -134,7 +78,25 @@ const getDoctorById = async (req, res) => {
   }
 };
 
-module.exports = {
-  getAllDoctors,
-  getDoctorById,
+export const getAllSpecialities = async (req, res) => {
+  try {
+    const specialities = await doctorModel.getAllSpecialities();
+
+    const transformedData = specialities.map((item) => ({
+      speciality: item.name,
+      image: item.image,
+    }));
+
+    res.status(200).json({
+      success: true,
+      count: transformedData.length,
+      specialities: transformedData,
+    });
+  } catch (error) {
+    console.error('Error fetching specialities:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch specialities',
+    });
+  }
 };

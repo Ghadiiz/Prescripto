@@ -1,27 +1,30 @@
-const express = require('express');
-const cors = require('cors');
-require('dotenv').config();
-const { connectCloudinary } = require('./config/cloudinary');
-const { connectDB } = require('./config/mysql');
-const doctorRoutes = require('./routes/doctorRoutes');
-const specialityRoutes = require('./routes/specialityRoutes');
+import express from 'express';
+import cors from 'cors';
+import dotenv from 'dotenv';
+import { connectDB } from './src/config/mysql.js';
+import { connectCloudinary } from './src/config/cloudinary.js';
+import authRoutes from './src/auth/routes/authRoutes.js';
+import doctorRoutes from './src/doctors/routes/doctorRoutes.js';
+import appointmentRoutes from './src/appointments/routes/appointmentRoutes.js';
+
+dotenv.config();
 
 const app = express();
-
 const PORT = process.env.PORT || 3000;
 
-connectCloudinary();
-connectDB();
-
-app.use(express.json());
 app.use(cors());
+app.use(express.json());
+
+connectDB();
+connectCloudinary();
 
 app.get('/', (req, res) => {
-  res.json({ message: 'API is working' });
+  res.send('Prescripto API is running...');
 });
 
+app.use('/api/auth', authRoutes);
 app.use('/api/doctors', doctorRoutes);
-app.use('/api/specialities', specialityRoutes);
+app.use('/api/appointments', appointmentRoutes);
 
 app.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}...`);

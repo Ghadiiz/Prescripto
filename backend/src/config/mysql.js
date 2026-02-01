@@ -1,5 +1,7 @@
-const mysql = require('mysql2/promise');
-require('dotenv').config();
+import mysql from 'mysql2/promise';
+import dotenv from 'dotenv';
+
+dotenv.config();
 
 let connection;
 
@@ -27,4 +29,4 @@ const getDB = () => {
   return connection;
 };
 
-module.exports = { connectDB, getDB };
+export { connectDB, getDB };
