@@ -5,6 +5,11 @@ import { authMiddleware } from '../../auth/middleware/authMiddleware.js';
 const router = express.Router();
 
 router.get('/available-slots', appointmentController.getAvailableSlots);
+router.post(
+  '/checkout/preview',
+  authMiddleware,
+  appointmentController.getCheckoutPreview,
+);
 
 router.post('/', authMiddleware, appointmentController.bookAppointment);
 router.get(

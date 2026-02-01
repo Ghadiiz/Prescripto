@@ -196,10 +196,45 @@ const getAvailableSlots = async (req, res) => {
   }
 };
 
+const getCheckoutPreview = async (req, res) => {
+  try {
+    const userId = req.userId; // From auth middleware
+    const { doctorId, appointmentDate, appointmentTime } = req.body;
+
+    // Validate required fields
+    if (!doctorId || !appointmentDate || !appointmentTime) {
+      return res.status(400).json({
+        success: false,
+        message: 'Doctor ID, appointment date, and time are required',
+      });
+    }
+
+    const preview = await appointmentService.createCheckoutPreview(
+      userId,
+      doctorId,
+      appointmentDate,
+      appointmentTime,
+    );
+
+    res.status(200).json({
+      success: true,
+      message: 'Checkout preview retrieved successfully',
+      data: preview,
+    });
+  } catch (error) {
+    console.error('Error getting checkout preview:', error);
+    res.status(500).json({
+      success: false,
+      message: error.message || 'Failed to get checkout preview',
+    });
+  }
+};
+
 export {
   bookAppointment,
   getMyAppointments,
   getAppointmentById,
   cancelAppointment,
   getAvailableSlots,
+  getCheckoutPreview,
 };
