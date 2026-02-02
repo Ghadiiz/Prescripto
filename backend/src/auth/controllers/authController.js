@@ -35,8 +35,10 @@ export const registerUser = async (req, res) => {
 
     res.status(201).json({
       success: true,
-      message: 'User registered successfully',
+      message:
+        'Registration successful! Please check your email to verify your account.',
       token: result.token,
+      needsVerification: true,
     });
   } catch (error) {
     if (error.message === 'EMAIL_EXISTS') {
@@ -71,12 +73,22 @@ export const loginUser = async (req, res) => {
       success: true,
       message: 'Login successful',
       token: result.token,
+      user: result.user,
     });
   } catch (error) {
     if (error.message === 'INVALID_CREDENTIALS') {
       return res.status(401).json({
         success: false,
         message: 'Invalid email or password',
+      });
+    }
+
+    if (error.message === 'EMAIL_NOT_VERIFIED') {
+      return res.status(403).json({
+        success: false,
+        message:
+          'Please verify your email before logging in. Check your inbox for the verification link.',
+        needsVerification: true,
       });
     }
 
@@ -169,6 +181,143 @@ export const uploadProfileImage = async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Failed to upload image',
+    });
+  }
+};
+
+export const verifyEmail = async (req, res) => {
+  try {
+    const { token } = req.body;
+
+    if (!token) {
+      return res.status(400).json({
+        success: false,
+        message: 'Verification token is required',
+      });
+    }
+
+    await authService.verifyEmailService(token);
+
+    res.status(200).json({
+      success: true,
+      message: 'Email verified successfully! You can now login.',
+    });
+  } catch (error) {
+    if (error.message === 'INVALID_OR_EXPIRED_TOKEN') {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid or expired verification token',
+      });
+    }
+
+    console.error('Verify email error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Email verification failed',
+    });
+  }
+};
+
+export const resendVerificationEmail = async (req, res) => {
+  try {
+    const { email } = req.body;
+
+    if (!email) {
+      return res.status(400).json({
+        success: false,
+        message: 'Email is required',
+      });
+    }
+
+    await authService.resendVerificationEmailService(email);
+
+    res.status(200).json({
+      success: true,
+      message: 'Verification email sent! Please check your inbox.',
+    });
+  } catch (error) {
+    if (error.message === 'USER_NOT_FOUND') {
+      return res.status(404).json({
+        success: false,
+        message: 'User not found',
+      });
+    }
+
+    if (error.message === 'ALREADY_VERIFIED') {
+      return res.status(400).json({
+        success: false,
+        message: 'Email already verified',
+      });
+    }
+
+    console.error('Resend verification error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to send verification email',
+    });
+  }
+};
+
+export const forgotPassword = async (req, res) => {
+  try {
+    const { email } = req.body;
+
+    if (!email) {
+      return res.status(400).json({
+        success: false,
+        message: 'Email is required',
+      });
+    }
+
+    const result = await authService.forgotPasswordService(email);
+
+    res.status(200).json(result);
+  } catch (error) {
+    console.error('Forgot password error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to process password reset request',
+    });
+  }
+};
+
+export const resetPassword = async (req, res) => {
+  try {
+    const { token, password } = req.body;
+
+    if (!token || !password) {
+      return res.status(400).json({
+        success: false,
+        message: 'Token and new password are required',
+      });
+    }
+
+    if (password.length < 8) {
+      return res.status(400).json({
+        success: false,
+        message: 'Password must be at least 8 characters long',
+      });
+    }
+
+    await authService.resetPasswordService(token, password);
+
+    res.status(200).json({
+      success: true,
+      message:
+        'Password reset successful! You can now login with your new password.',
+    });
+  } catch (error) {
+    if (error.message === 'INVALID_OR_EXPIRED_TOKEN') {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid or expired reset token',
+      });
+    }
+
+    console.error('Reset password error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Password reset failed',
     });
   }
 };
