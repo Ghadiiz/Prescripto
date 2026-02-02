@@ -216,10 +216,96 @@ const getAvailableSlots = async (doctorId, date) => {
   return slots;
 };
 
+const createCheckoutPreview = async (
+  userId,
+  doctorId,
+  appointmentDate,
+  appointmentTime,
+) => {
+  // Get full doctor details
+  const { getDB } = await import('../../config/mysql.js');
+  const pool = getDB();
+
+  const doctorQuery = `
+    SELECT d.*, s.name as speciality_name
+    FROM doctors d
+    JOIN specialities s ON d.speciality_id = s.id
+    WHERE d.id = ?
+  `;
+  const [doctorRows] = await pool.query(doctorQuery, [doctorId]);
+  const fullDoctor = doctorRows[0];
+
+  if (!fullDoctor) {
+    throw new Error('Doctor not found');
+  }
+
+  if (!fullDoctor.available) {
+    throw new Error('Doctor is not available');
+  }
+
+  // Get user details
+  const userQuery = `
+    SELECT id, name, email, phone, image
+    FROM users
+    WHERE id = ?
+  `;
+  const [userRows] = await pool.query(userQuery, [userId]);
+  const user = userRows[0];
+
+  if (!user) {
+    throw new Error('User not found');
+  }
+
+  // Convert time if needed
+  let timeIn24Hour = appointmentTime;
+  if (appointmentTime.includes('AM') || appointmentTime.includes('PM')) {
+    timeIn24Hour = convertTo24Hour(appointmentTime);
+  }
+
+  // Return checkout preview
+  return {
+    doctor: {
+      _id: fullDoctor.id,
+      name: fullDoctor.name,
+      speciality: fullDoctor.speciality_name,
+      degree: fullDoctor.degree,
+      experience: fullDoctor.experience,
+      about: fullDoctor.about,
+      fees: parseFloat(fullDoctor.fees),
+      image: fullDoctor.image,
+      address: {
+        line1: fullDoctor.address_line1,
+        line2: fullDoctor.address_line2,
+      },
+    },
+    patient: {
+      _id: user.id,
+      name: user.name,
+      email: user.email,
+      phone: user.phone,
+      image: user.image,
+    },
+    appointment: {
+      date: formatDate(appointmentDate),
+      time: convertTo12Hour(timeIn24Hour),
+      rawDate: appointmentDate,
+      rawTime: appointmentTime,
+    },
+    payment: {
+      method: 'cash',
+      amount: parseFloat(fullDoctor.fees),
+      currency: 'USD',
+      status: 'pending',
+    },
+    total: parseFloat(fullDoctor.fees),
+  };
+};
+
 export {
   bookAppointment,
   getUserAppointments,
   getAppointmentDetails,
   cancelAppointment,
   getAvailableSlots,
+  createCheckoutPreview,
 };
