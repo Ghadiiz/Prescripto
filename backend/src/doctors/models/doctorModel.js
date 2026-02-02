@@ -64,3 +64,19 @@ export const getAllSpecialities = async () => {
   const [specialities] = await db.query('SELECT * FROM specialities');
   return specialities;
 };
+
+export const searchDoctors = async (query) => {
+  const db = getDB();
+  const searchQuery = `%${query}%`;
+
+  const [doctors] = await db.query(
+    `SELECT d.*, s.name as speciality 
+     FROM doctors d 
+     LEFT JOIN specialities s ON d.speciality_id = s.id 
+     WHERE d.name LIKE ? OR s.name LIKE ?
+     ORDER BY d.name ASC`,
+    [searchQuery, searchQuery],
+  );
+
+  return doctors;
+};
