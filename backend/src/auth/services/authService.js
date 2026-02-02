@@ -3,7 +3,18 @@ import jwt from 'jsonwebtoken';
 import * as userModel from '../models/userModel.js';
 import cloudinary from '../../config/cloudinary.js';
 
-export const registerUserService = async (name, email, password) => {
+export const registerUserService = async (userData) => {
+  const {
+    name,
+    email,
+    password,
+    phone,
+    address_line1,
+    address_line2,
+    gender,
+    dob,
+  } = userData;
+
   const existingUser = await userModel.findUserByEmail(email);
 
   if (existingUser) {
@@ -11,7 +22,16 @@ export const registerUserService = async (name, email, password) => {
   }
 
   const hashedPassword = await bcrypt.hash(password, 10);
-  const userId = await userModel.createUser(name, email, hashedPassword);
+  const userId = await userModel.createUser({
+    name,
+    email,
+    hashedPassword,
+    phone,
+    address_line1,
+    address_line2,
+    gender,
+    dob,
+  });
 
   const token = jwt.sign({ userId }, process.env.JWT_SECRET, {
     expiresIn: '7d',

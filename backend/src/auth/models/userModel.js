@@ -17,11 +17,32 @@ export const findUserById = async (id) => {
   return users[0];
 };
 
-export const createUser = async (name, email, hashedPassword) => {
+export const createUser = async (userData) => {
+  const {
+    name,
+    email,
+    hashedPassword,
+    phone,
+    address_line1,
+    address_line2,
+    gender,
+    dob,
+  } = userData;
+
   const db = getDB();
   const [result] = await db.query(
-    'INSERT INTO users (name, email, password) VALUES (?, ?, ?)',
-    [name, email, hashedPassword],
+    'INSERT INTO users (name, email, password, phone, address_line1, address_line2, gender, dob, role) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+    [
+      name,
+      email,
+      hashedPassword,
+      phone,
+      address_line1,
+      address_line2,
+      gender,
+      dob,
+      'user',
+    ],
   );
   return result.insertId;
 };
