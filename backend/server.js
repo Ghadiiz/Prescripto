@@ -7,6 +7,7 @@ import authRoutes from './src/auth/routes/authRoutes.js';
 import doctorRoutes from './src/doctors/routes/doctorRoutes.js';
 import appointmentRoutes from './src/appointments/routes/appointmentRoutes.js';
 import adminRoutes from './src/admin/routes/adminRoutes.js';
+import doctorPanelsRoutes from './src/doctors/routes/doctorPanelRoutes.js';
 
 dotenv.config();
 
@@ -27,6 +28,7 @@ app.use('/api/auth', authRoutes);
 app.use('/api/doctors', doctorRoutes);
 app.use('/api/appointments', appointmentRoutes);
 app.use('/api/admin', adminRoutes);
+app.use('/api/doctor', doctorPanelsRoutes);
 
 app.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}...`);
