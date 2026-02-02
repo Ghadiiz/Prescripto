@@ -5,6 +5,10 @@ import {
   getUserProfile,
   updateUserProfile,
   uploadProfileImage,
+  verifyEmail,
+  resendVerificationEmail,
+  forgotPassword,
+  resetPassword,
 } from '../controllers/authController.js';
 import { authMiddleware } from '../middleware/authMiddleware.js';
 import multer from 'multer';
@@ -23,5 +27,9 @@ router.post(
   upload.single('image'),
   uploadProfileImage,
 );
+router.post('/verify-email', verifyEmail);
+router.post('/resend-verification', resendVerificationEmail);
+router.post('/forgot-password', forgotPassword);
+router.post('/reset-password', resetPassword);
 
 export default router;
