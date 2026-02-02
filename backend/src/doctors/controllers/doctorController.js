@@ -100,3 +100,47 @@ export const getAllSpecialities = async (req, res) => {
     });
   }
 };
+
+export const searchDoctors = async (req, res) => {
+  try {
+    const { query } = req.query;
+
+    if (!query || query.trim() === '') {
+      return res.status(400).json({
+        success: false,
+        message: 'Search query is required',
+      });
+    }
+
+    const doctors = await doctorModel.searchDoctors(query);
+
+    const transformedDoctors = doctors.map((doc) => ({
+      _id: doc.id.toString(),
+      name: doc.name,
+      email: doc.email,
+      image: doc.image,
+      speciality: doc.speciality,
+      degree: doc.degree,
+      experience: doc.experience,
+      about: doc.about,
+      fees: doc.fees,
+      address: {
+        line1: doc.address_line1,
+        line2: doc.address_line2,
+      },
+      available: Boolean(doc.available),
+    }));
+
+    res.status(200).json({
+      success: true,
+      count: transformedDoctors.length,
+      doctors: transformedDoctors,
+    });
+  } catch (error) {
+    console.error('Error searching doctors:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to search doctors',
+    });
+  }
+};
