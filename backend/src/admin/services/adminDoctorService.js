@@ -1,11 +1,11 @@
 import { getDB } from '../../config/mysql.js';
 import { uploadToCloudinary } from '../../config/cloudinary.js';
+import bcrypt from 'bcrypt';
 
 export const getAllDoctors = async () => {
   const pool = getDB();
-
   const [doctors] = await pool.query(`
-    SELECT 
+    SELECT
       d.id,
       d.name,
       d.email,
@@ -43,8 +43,8 @@ export const getAllDoctors = async () => {
 
 export const addDoctor = async (doctorData, imageFile) => {
   const pool = getDB();
-
   let imageUrl = null;
+
   if (imageFile) {
     imageUrl = await uploadToCloudinary(imageFile.path);
   }
@@ -62,14 +62,16 @@ export const addDoctor = async (doctorData, imageFile) => {
     address_line2,
   } = doctorData;
 
+  const hashedPassword = await bcrypt.hash(password, 10);
+
   const [result] = await pool.query(
-    `INSERT INTO doctors 
-    (name, email, password, image, speciality_id, degree, experience, about, fees, address_line1, address_line2, available) 
+    `INSERT INTO doctors
+    (name, email, password, image, speciality_id, degree, experience, about, fees, address_line1, address_line2, available)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, true)`,
     [
       name,
       email,
-      password,
+      hashedPassword,
       imageUrl,
       speciality_id,
       degree,
@@ -82,7 +84,7 @@ export const addDoctor = async (doctorData, imageFile) => {
   );
 
   const [doctors] = await pool.query(
-    `SELECT 
+    `SELECT
       d.id,
       d.name,
       d.email,
@@ -102,6 +104,7 @@ export const addDoctor = async (doctorData, imageFile) => {
   );
 
   const doc = doctors[0];
+
   return {
     id: doc.id,
     name: doc.name,
@@ -133,6 +136,7 @@ export const updateDoctor = async (doctorId, doctorData, imageFile) => {
   }
 
   let imageUrl = existingDoctor[0].image;
+
   if (imageFile) {
     imageUrl = await uploadToCloudinary(imageFile.path);
   }
@@ -140,6 +144,7 @@ export const updateDoctor = async (doctorId, doctorData, imageFile) => {
   const {
     name,
     email,
+    password,
     speciality_id,
     degree,
     experience,
@@ -149,14 +154,20 @@ export const updateDoctor = async (doctorId, doctorData, imageFile) => {
     address_line2,
   } = doctorData;
 
+  let finalPassword = existingDoctor[0].password;
+  if (password && password.trim() !== '') {
+    finalPassword = await bcrypt.hash(password, 10);
+  }
+
   await pool.query(
-    `UPDATE doctors 
-    SET name = ?, email = ?, image = ?, speciality_id = ?, degree = ?, 
-        experience = ?, about = ?, fees = ?, address_line1 = ?, address_line2 = ?
+    `UPDATE doctors
+    SET name = ?, email = ?, password = ?, image = ?, speciality_id = ?, degree = ?,
+    experience = ?, about = ?, fees = ?, address_line1 = ?, address_line2 = ?
     WHERE id = ?`,
     [
       name,
       email,
+      finalPassword,
       imageUrl,
       speciality_id,
       degree,
@@ -170,7 +181,7 @@ export const updateDoctor = async (doctorId, doctorData, imageFile) => {
   );
 
   const [doctors] = await pool.query(
-    `SELECT 
+    `SELECT
       d.id,
       d.name,
       d.email,
@@ -190,6 +201,7 @@ export const updateDoctor = async (doctorId, doctorData, imageFile) => {
   );
 
   const doc = doctors[0];
+
   return {
     id: doc.id,
     name: doc.name,
