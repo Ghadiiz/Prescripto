@@ -290,4 +290,4 @@ const doctors = [
   },
 ];
 
-module.exports = { specialities, doctors };
+export { specialities, doctors };

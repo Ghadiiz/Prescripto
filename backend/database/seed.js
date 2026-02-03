@@ -1,7 +1,9 @@
-const mysql = require('mysql2/promise');
-const bcrypt = require('bcrypt');
-require('dotenv').config();
-const { specialities, doctors } = require('./seedData');
+import mysql from 'mysql2/promise';
+import bcrypt from 'bcrypt';
+import dotenv from 'dotenv';
+import { specialities, doctors } from './seedData.js';
+
+dotenv.config();
 
 const seedDatabase = async () => {
   let connection;
@@ -30,7 +32,7 @@ const seedDatabase = async () => {
         'INSERT INTO specialities (name, image) VALUES (?, ?)',
         [speciality.name, speciality.image],
       );
-      console.log(`   Added: ${speciality.name}`);
+      console.log(`Added: ${speciality.name}`);
     }
     console.log(`Inserted ${specialities.length} specialities\n`);
 
@@ -38,23 +40,21 @@ const seedDatabase = async () => {
     const [specialityRows] = await connection.query(
       'SELECT id, name FROM specialities',
     );
-
     const specialityMap = {};
     specialityRows.forEach((row) => {
       specialityMap[row.name] = row.id;
-      console.log(`   ${row.name} → ID: ${row.id}`);
+      console.log(`  ${row.name} → ID: ${row.id}`);
     });
     console.log('Speciality map created\n');
 
     console.log('Inserting doctors...');
     for (const doctor of doctors) {
       const hashedPassword = await bcrypt.hash(doctor.password, 10);
-
       const specialityId = specialityMap[doctor.speciality];
 
       await connection.query(
-        `INSERT INTO doctors 
-        (name, email, password, image, speciality_id, degree, experience, about, fees, address_line1, address_line2, available) 
+        `INSERT INTO doctors
+        (name, email, password, image, speciality_id, degree, experience, about, fees, address_line1, address_line2, available)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           doctor.name,
@@ -71,7 +71,7 @@ const seedDatabase = async () => {
           doctor.available,
         ],
       );
-      console.log(`   Added: ${doctor.name} (${doctor.speciality})`);
+      console.log(`Added: ${doctor.name} (${doctor.speciality})`);
     }
     console.log(`Inserted ${doctors.length} doctors\n`);
 
