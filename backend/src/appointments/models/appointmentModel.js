@@ -5,6 +5,7 @@ const createAppointment = async (
   doctorId,
   appointmentDate,
   appointmentTime,
+  amount = 0,
 ) => {
   const pool = getDB();
   const query = `
@@ -17,6 +18,7 @@ const createAppointment = async (
     doctorId,
     appointmentDate,
     appointmentTime,
+    amount,
   ]);
   return result.insertId;
 };

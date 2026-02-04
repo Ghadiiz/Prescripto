@@ -103,6 +103,7 @@ const bookAppointment = async (
     doctorId,
     appointmentDate,
     timeIn24Hour,
+    doctor.fees || 0,
   );
 
   const appointment = await appointmentModel.findAppointmentById(appointmentId);
