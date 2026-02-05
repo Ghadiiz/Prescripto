@@ -177,15 +177,50 @@ const MyAppointments = () => {
                   </span>{' '}
                   {item.slotDate} | {item.slotTime}
                 </p>
-                {item.status === 'cancelled' && item.cancellationReason && (
-                  <p className="mt-2 text-xs text-red-600">
-                    <span className="font-medium">Cancellation Reason:</span>{' '}
-                    {item.cancellationReason}
-                  </p>
-                )}
+
+                {/* ✅ ADD THIS - Payment Method Display */}
+                <p className="mt-1">
+                  <span className="text-sm text-[#3C3C3C] font-medium">
+                    Payment:
+                  </span>{' '}
+                  {item.payment ? (
+                    <span className="inline-flex items-center gap-1 text-xs font-semibold text-green-600 bg-green-50 px-2 py-0.5 rounded-full">
+                      💳 Online Payment
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center gap-1 text-xs font-semibold text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full">
+                      💵 Cash on Arrival
+                    </span>
+                  )}
+                </p>
+
+                <div className="mt-2">
+                  {item.status?.toLowerCase() === 'cancelled' ? (
+                    <span className="inline-block bg-red-100 text-red-700 text-xs font-semibold px-3 py-1 rounded-full">
+                      ● Cancelled
+                    </span>
+                  ) : item.status?.toLowerCase() === 'completed' ? (
+                    <span className="inline-block bg-green-100 text-green-700 text-xs font-semibold px-3 py-1 rounded-full">
+                      ● Completed
+                    </span>
+                  ) : (
+                    <span className="inline-block bg-blue-100 text-blue-700 text-xs font-semibold px-3 py-1 rounded-full">
+                      ● Pending
+                    </span>
+                  )}
+                </div>
+
+                {item.status?.toLowerCase() === 'cancelled' &&
+                  item.cancellationReason && (
+                    <p className="mt-2 text-xs text-red-600">
+                      <span className="font-medium">Cancellation Reason:</span>{' '}
+                      {item.cancellationReason}
+                    </p>
+                  )}
               </div>
+
               <div className="flex flex-col gap-2 justify-end text-sm text-center">
-                {item.status === 'cancelled' ? (
+                {item.status?.toLowerCase() === 'cancelled' ? (
                   <>
                     <button className="sm:min-w-48 py-2 px-4 border border-red-500 text-red-500 bg-red-50 rounded cursor-not-allowed">
                       Cancelled
@@ -197,7 +232,7 @@ const MyAppointments = () => {
                       Remove from view
                     </button>
                   </>
-                ) : item.status === 'completed' ? (
+                ) : item.status?.toLowerCase() === 'completed' ? (
                   <button className="sm:min-w-48 py-2 px-4 border border-green-500 text-green-500 bg-green-50 rounded cursor-not-allowed">
                     Completed
                   </button>

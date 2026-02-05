@@ -19,6 +19,7 @@ const Appointment = () => {
   const [selectedDate, setSelectedDate] = useState('');
   const [selectedTime, setSelectedTime] = useState('');
   const [loading, setLoading] = useState(true);
+  const [paymentMethod, setPaymentMethod] = useState('cash'); // ✅ ADD THIS
 
   // Fetch doctor details
   const fetchDocInfo = async () => {
@@ -81,7 +82,7 @@ const Appointment = () => {
     }
   };
 
-  // Book appointment
+  // ✅ UPDATED: Book appointment with payment method
   const bookAppointment = async () => {
     if (!token) {
       toast.warning('Please login to book appointment');
@@ -100,6 +101,7 @@ const Appointment = () => {
           doctorId: docId,
           slotDate: selectedDate,
           slotTime: selectedTime,
+          payment: paymentMethod === 'online', // ✅ ADD THIS - false for cash, true for online
         },
         { headers: { Authorization: `Bearer ${token}` } },
       );
@@ -289,9 +291,39 @@ const Appointment = () => {
           )}
         </div>
 
+        {/* ✅ PAYMENT METHOD SELECTION */}
+        <div className="mt-6 mb-4">
+          <p className="text-gray-700 font-medium mb-3">Payment Method</p>
+          <div className="flex gap-4">
+            <label className="flex items-center gap-2 cursor-pointer bg-white border-2 border-gray-300 rounded-lg px-4 py-3 hover:border-primary transition-all">
+              <input
+                type="radio"
+                name="paymentMethod"
+                value="cash"
+                checked={paymentMethod === 'cash'}
+                onChange={(e) => setPaymentMethod(e.target.value)}
+                className="w-4 h-4 text-primary"
+              />
+              <span className="text-sm font-medium">💵 Cash on Arrival</span>
+            </label>
+
+            <label className="flex items-center gap-2 cursor-not-allowed bg-gray-50 border-2 border-gray-300 rounded-lg px-4 py-3 opacity-50">
+              <input
+                type="radio"
+                name="paymentMethod"
+                value="online"
+                disabled
+                className="w-4 h-4"
+              />
+              <span className="text-sm font-medium">💳 Online Payment</span>
+              <span className="text-xs text-gray-500">(Coming Soon)</span>
+            </label>
+          </div>
+        </div>
+
         <button
           onClick={bookAppointment}
-          className="bg-primary text-white text-sm font-light px-20 py-3 rounded-full my-6"
+          className="bg-primary text-white text-sm font-light px-20 py-3 rounded-full my-6 hover:bg-primary/90 transition-all"
         >
           Book an appointment
         </button>

@@ -27,7 +27,6 @@ const MyProfile = () => {
   const parsePhoneNumber = (fullPhone) => {
     if (!fullPhone) return { countryCode: '+962', phoneNumber: '' };
 
-    // Find matching country code
     const matchedCountry = countryCodes.find((c) =>
       fullPhone.startsWith(c.code),
     );
@@ -38,7 +37,6 @@ const MyProfile = () => {
       };
     }
 
-    // Default to Jordan if no match
     return { countryCode: '+962', phoneNumber: fullPhone };
   };
 
@@ -50,12 +48,10 @@ const MyProfile = () => {
   const formatDateForInput = (dateString) => {
     if (!dateString) return '';
 
-    // Handle ISO format (2005-08-13T21:00:00.000Z)
     if (dateString.includes('T')) {
       return dateString.split('T')[0];
     }
 
-    // Handle Date object
     if (dateString instanceof Date) {
       const year = dateString.getFullYear();
       const month = String(dateString.getMonth() + 1).padStart(2, '0');
@@ -63,7 +59,6 @@ const MyProfile = () => {
       return `${year}-${month}-${day}`;
     }
 
-    // Already in YYYY-MM-DD format
     return dateString;
   };
 
@@ -77,17 +72,14 @@ const MyProfile = () => {
 
   // Validate phone number based on country
   const validatePhone = (countryCode, phoneNumber) => {
-    if (!phoneNumber) return true; // Optional field
+    if (!phoneNumber) return true;
 
-    // Remove spaces, dashes, parentheses
     const cleanNumber = phoneNumber.replace(/[\s\-()]/g, '');
 
-    // Check if only digits
     if (!/^\d+$/.test(cleanNumber)) {
       return false;
     }
 
-    // Find country rules
     const country = countryCodes.find((c) => c.code === countryCode);
     if (country) {
       return cleanNumber.length === country.digits;
@@ -98,11 +90,9 @@ const MyProfile = () => {
 
   // Handle phone number input
   const handlePhoneNumberChange = (value) => {
-    // Only allow digits
     const cleanValue = value.replace(/\D/g, '');
     setPhoneData((prev) => ({ ...prev, phoneNumber: cleanValue }));
 
-    // Update userData with combined phone
     const fullPhone = phoneData.countryCode + cleanValue;
     setUserData((prev) => ({ ...prev, phone: fullPhone }));
   };
@@ -111,7 +101,6 @@ const MyProfile = () => {
   const handleCountryCodeChange = (newCode) => {
     setPhoneData((prev) => ({ ...prev, countryCode: newCode }));
 
-    // Update userData with combined phone
     const fullPhone = newCode + phoneData.phoneNumber;
     setUserData((prev) => ({ ...prev, phone: fullPhone }));
   };
@@ -119,7 +108,6 @@ const MyProfile = () => {
   // Update profile
   const updateUserProfileData = async () => {
     try {
-      // Validate phone
       if (
         phoneData.phoneNumber &&
         !validatePhone(phoneData.countryCode, phoneData.phoneNumber)
@@ -133,7 +121,6 @@ const MyProfile = () => {
         return;
       }
 
-      // Format date to YYYY-MM-DD only (remove time component)
       let formattedDob = null;
       if (userData.dob) {
         formattedDob = formatDateForInput(userData.dob);
@@ -213,43 +200,49 @@ const MyProfile = () => {
   return userData ? (
     <div className="max-w-lg flex flex-col gap-2 text-sm">
       {/* Profile Image */}
-      {isEdit ? (
-        <label htmlFor="image">
-          <div className="inline-block relative cursor-pointer">
-            <img
-              className="w-36 rounded opacity-75"
-              src={
-                image
-                  ? URL.createObjectURL(image)
-                  : userData.image || assets.profile_pic
-              }
-              alt=""
-            />
-            <img
-              className="w-10 absolute bottom-12 right-12"
-              src={image ? '' : assets.upload_icon}
-              alt=""
-            />
-          </div>
-          <input
-            onChange={(e) => setImage(e.target.files[0])}
-            type="file"
-            id="image"
-            hidden
-          />
-        </label>
-      ) : (
+      <div className="relative inline-block mb-2">
         <img
-          className="w-36 rounded"
-          src={userData.image || assets.profile_pic}
-          alt=""
+          className="w-36 h-36 object-cover rounded"
+          src={
+            image
+              ? URL.createObjectURL(image)
+              : userData.image || assets.upload_area // ✅ Changed from assets.profile_pic
+          }
+          alt="Profile"
         />
-      )}
 
-      {/* Name */}
+        <label
+          htmlFor="profileImageInput"
+          className="absolute bottom-2 right-2 bg-primary text-white rounded-full p-2.5 shadow-lg hover:scale-110 cursor-pointer transition-all"
+          title="Change profile picture"
+        >
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            className="h-5 w-5"
+            viewBox="0 0 20 20"
+            fill="currentColor"
+          >
+            <path
+              fillRule="evenodd"
+              d="M4 5a2 2 0 00-2 2v8a2 2 0 002 2h12a2 2 0 002-2V7a2 2 0 00-2-2h-1.586a1 1 0 01-.707-.293l-1.121-1.121A2 2 0 0011.172 3H8.828a2 2 0 00-1.414.586L6.293 4.707A1 1 0 015.586 5H4zm6 9a3 3 0 100-6 3 3 0 000 6z"
+              clipRule="evenodd"
+            />
+          </svg>
+        </label>
+
+        <input
+          onChange={(e) => setImage(e.target.files[0])}
+          type="file"
+          id="profileImageInput"
+          hidden
+          accept="image/*"
+        />
+      </div>
+
+      {/* Name - Directly below image, no gap */}
       {isEdit ? (
         <input
-          className="bg-gray-50 text-3xl font-medium max-w-60 mt-4"
+          className="bg-gray-50 text-3xl font-medium max-w-60"
           type="text"
           value={userData.name || ''}
           onChange={(e) =>
@@ -257,7 +250,7 @@ const MyProfile = () => {
           }
         />
       ) : (
-        <p className="font-medium text-3xl text-neutral-800 mt-4">
+        <p className="font-medium text-3xl text-neutral-800">
           {userData.name || 'Not provided'}
         </p>
       )}
