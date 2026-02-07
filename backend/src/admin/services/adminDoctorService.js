@@ -1,6 +1,7 @@
 import { getDB } from '../../config/mysql.js';
 import { uploadToCloudinary } from '../../config/cloudinary.js';
-import bcrypt from 'bcrypt';
+import crypto from 'crypto';
+import { sendDoctorSetPasswordEmail } from '../../utils/emailService.js';
 
 export const getAllDoctors = async () => {
   const pool = getDB();
@@ -17,7 +18,8 @@ export const getAllDoctors = async () => {
       d.fees,
       d.address_line1,
       d.address_line2,
-      d.available
+      d.available,
+      d.is_verified
     FROM doctors d
     JOIN specialities s ON d.speciality_id = s.id
     ORDER BY d.id DESC
@@ -38,6 +40,7 @@ export const getAllDoctors = async () => {
       line2: doc.address_line2,
     },
     available: Boolean(doc.available),
+    isVerified: Boolean(doc.is_verified),
   }));
 };
 
@@ -52,7 +55,6 @@ export const addDoctor = async (doctorData, imageFile) => {
   const {
     name,
     email,
-    password,
     speciality_id,
     degree,
     experience,
@@ -62,16 +64,24 @@ export const addDoctor = async (doctorData, imageFile) => {
     address_line2,
   } = doctorData;
 
-  const hashedPassword = await bcrypt.hash(password, 10);
+  const [existing] = await pool.query('SELECT * FROM doctors WHERE email = ?', [
+    email,
+  ]);
+
+  if (existing.length > 0) {
+    throw new Error('Doctor with this email already exists');
+  }
+
+  const verificationToken = crypto.randomBytes(32).toString('hex');
+  const tokenExpires = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
 
   const [result] = await pool.query(
     `INSERT INTO doctors
-    (name, email, password, image, speciality_id, degree, experience, about, fees, address_line1, address_line2, available)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, true)`,
+    (name, email, password, image, speciality_id, degree, experience, about, fees, address_line1, address_line2, available, is_verified, verification_token, verification_token_expires)
+    VALUES (?, ?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, true, 0, ?, ?)`,
     [
       name,
       email,
-      hashedPassword,
       imageUrl,
       speciality_id,
       degree,
@@ -80,8 +90,16 @@ export const addDoctor = async (doctorData, imageFile) => {
       fees,
       address_line1,
       address_line2,
+      verificationToken,
+      tokenExpires,
     ],
   );
+
+  try {
+    await sendDoctorSetPasswordEmail(email, name, verificationToken);
+  } catch (emailError) {
+    console.error('Failed to send doctor set password email:', emailError);
+  }
 
   const [doctors] = await pool.query(
     `SELECT
@@ -96,7 +114,8 @@ export const addDoctor = async (doctorData, imageFile) => {
       d.fees,
       d.address_line1,
       d.address_line2,
-      d.available
+      d.available,
+      d.is_verified
     FROM doctors d
     JOIN specialities s ON d.speciality_id = s.id
     WHERE d.id = ?`,
@@ -120,6 +139,7 @@ export const addDoctor = async (doctorData, imageFile) => {
       line2: doc.address_line2,
     },
     available: Boolean(doc.available),
+    isVerified: Boolean(doc.is_verified),
   };
 };
 
@@ -156,6 +176,7 @@ export const updateDoctor = async (doctorId, doctorData, imageFile) => {
 
   let finalPassword = existingDoctor[0].password;
   if (password && password.trim() !== '') {
+    const bcrypt = await import('bcrypt');
     finalPassword = await bcrypt.hash(password, 10);
   }
 
@@ -193,7 +214,8 @@ export const updateDoctor = async (doctorId, doctorData, imageFile) => {
       d.fees,
       d.address_line1,
       d.address_line2,
-      d.available
+      d.available,
+      d.is_verified
     FROM doctors d
     JOIN specialities s ON d.speciality_id = s.id
     WHERE d.id = ?`,
@@ -217,6 +239,7 @@ export const updateDoctor = async (doctorId, doctorData, imageFile) => {
       line2: doc.address_line2,
     },
     available: Boolean(doc.available),
+    isVerified: Boolean(doc.is_verified),
   };
 };
 

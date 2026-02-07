@@ -11,7 +11,6 @@ const MyProfile = () => {
   const { token, backendUrl, userData, setUserData, loadUserProfileData } =
     useContext(AppContext);
 
-  // Country codes with flags
   const countryCodes = [
     { code: '+962', country: 'Jordan', flag: '🇯🇴', digits: 9 },
     { code: '+1', country: 'USA/Canada', flag: '🇺🇸', digits: 10 },
@@ -23,7 +22,6 @@ const MyProfile = () => {
     { code: '+970', country: 'Palestine', flag: '🇵🇸', digits: 9 },
   ];
 
-  // Parse existing phone number
   const parsePhoneNumber = (fullPhone) => {
     if (!fullPhone) return { countryCode: '+962', phoneNumber: '' };
 
@@ -44,7 +42,6 @@ const MyProfile = () => {
     parsePhoneNumber(userData?.phone),
   );
 
-  // Format date from ISO to YYYY-MM-DD for input field
   const formatDateForInput = (dateString) => {
     if (!dateString) return '';
 
@@ -62,7 +59,6 @@ const MyProfile = () => {
     return dateString;
   };
 
-  // Format date for display
   const formatDateForDisplay = (dateString) => {
     if (!dateString) return 'Not provided';
     const date = new Date(dateString);
@@ -70,7 +66,6 @@ const MyProfile = () => {
     return date.toLocaleDateString('en-US', options);
   };
 
-  // Validate phone number based on country
   const validatePhone = (countryCode, phoneNumber) => {
     if (!phoneNumber) return true;
 
@@ -88,7 +83,6 @@ const MyProfile = () => {
     return cleanNumber.length >= 8 && cleanNumber.length <= 15;
   };
 
-  // Handle phone number input
   const handlePhoneNumberChange = (value) => {
     const cleanValue = value.replace(/\D/g, '');
     setPhoneData((prev) => ({ ...prev, phoneNumber: cleanValue }));
@@ -97,7 +91,6 @@ const MyProfile = () => {
     setUserData((prev) => ({ ...prev, phone: fullPhone }));
   };
 
-  // Handle country code change
   const handleCountryCodeChange = (newCode) => {
     setPhoneData((prev) => ({ ...prev, countryCode: newCode }));
 
@@ -105,7 +98,6 @@ const MyProfile = () => {
     setUserData((prev) => ({ ...prev, phone: fullPhone }));
   };
 
-  // Update profile
   const updateUserProfileData = async () => {
     try {
       if (
@@ -155,7 +147,6 @@ const MyProfile = () => {
     }
   };
 
-  // Upload profile image
   const uploadProfileImage = async () => {
     try {
       if (!image) {
@@ -189,7 +180,6 @@ const MyProfile = () => {
     }
   };
 
-  // Save both profile data and image
   const handleSave = async () => {
     await updateUserProfileData();
     if (image) {
@@ -199,14 +189,13 @@ const MyProfile = () => {
 
   return userData ? (
     <div className="max-w-lg flex flex-col gap-2 text-sm">
-      {/* Profile Image */}
       <div className="relative inline-block mb-2">
         <img
           className="w-36 h-36 object-cover rounded"
           src={
             image
               ? URL.createObjectURL(image)
-              : userData.image || assets.upload_area // ✅ Changed from assets.profile_pic
+              : userData.image || assets.upload_area
           }
           alt="Profile"
         />
@@ -239,7 +228,6 @@ const MyProfile = () => {
         />
       </div>
 
-      {/* Name - Directly below image, no gap */}
       {isEdit ? (
         <input
           className="bg-gray-50 text-3xl font-medium max-w-60"
@@ -257,7 +245,6 @@ const MyProfile = () => {
 
       <hr className="bg-zinc-400 h-[1px] border-none" />
 
-      {/* CONTACT INFORMATION */}
       <div>
         <p className="text-neutral-500 underline mt-3">CONTACT INFORMATION</p>
         <div className="grid grid-cols-[1fr_3fr] gap-y-2.5 mt-3 text-neutral-700">
@@ -329,7 +316,6 @@ const MyProfile = () => {
         </div>
       </div>
 
-      {/* BASIC INFORMATION */}
       <div>
         <p className="text-neutral-500 underline mt-3">BASIC INFORMATION</p>
         <div className="grid grid-cols-[1fr_3fr] gap-y-2.5 mt-3 text-neutral-700">
@@ -368,7 +354,6 @@ const MyProfile = () => {
         </div>
       </div>
 
-      {/* Edit/Save Button */}
       <div className="mt-10">
         {isEdit ? (
           <button

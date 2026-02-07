@@ -237,3 +237,43 @@ export const updateAvailability = async (req, res) => {
     });
   }
 };
+
+export const setPassword = async (req, res) => {
+  try {
+    const { token, password } = req.body;
+
+    if (!token || !password) {
+      return res.status(400).json({
+        success: false,
+        message: 'Token and password are required',
+      });
+    }
+
+    if (password.length < 8) {
+      return res.status(400).json({
+        success: false,
+        message: 'Password must be at least 8 characters long',
+      });
+    }
+
+    await doctorAuthService.setDoctorPassword(token, password);
+
+    res.status(200).json({
+      success: true,
+      message: 'Password set successfully! You can now login.',
+    });
+  } catch (error) {
+    if (error.message === 'INVALID_TOKEN') {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid or expired token',
+      });
+    }
+
+    console.error('Set password error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to set password',
+    });
+  }
+};

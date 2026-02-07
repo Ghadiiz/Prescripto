@@ -65,7 +65,6 @@ const DoctorsList = () => {
                   <p>Available</p>
                 </div>
 
-                {/* ✅ NEW: Edit and Delete buttons */}
                 <div className="mt-3 flex gap-2">
                   <button
                     onClick={() =>
@@ -88,7 +87,6 @@ const DoctorsList = () => {
         </div>
       )}
 
-      {/* ✅ Delete Confirmation Modal */}
       {showDeleteModal && (
         <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-50 z-50">
           <div className="bg-white rounded-lg p-6 max-w-sm w-full mx-4">

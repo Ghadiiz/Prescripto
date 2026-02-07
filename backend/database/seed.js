@@ -1,7 +1,7 @@
 import mysql from 'mysql2/promise';
 import bcrypt from 'bcrypt';
 import dotenv from 'dotenv';
-import { specialities, doctors } from './seedData.js';
+import { specialities, doctors, adminUser } from './seedData.js';
 
 dotenv.config();
 
@@ -19,6 +19,9 @@ const seedDatabase = async () => {
     });
     console.log('Connected to database\n');
 
+    console.log('Disabling foreign key checks...');
+    await connection.query('SET FOREIGN_KEY_CHECKS = 0');
+
     console.log('Clearing existing data...');
     await connection.query('DELETE FROM appointments');
     await connection.query('DELETE FROM doctors');
@@ -26,13 +29,34 @@ const seedDatabase = async () => {
     await connection.query('DELETE FROM users');
     console.log('Existing data cleared\n');
 
-    console.log('Inserting specialities...');
+    await connection.query('SET FOREIGN_KEY_CHECKS = 1');
+
+    console.log('Inserting admin user...');
+    const hashedAdminPassword = await bcrypt.hash(adminUser.password, 10);
+    await connection.query(
+      `INSERT INTO users (name, email, password, role, is_verified) 
+       VALUES (?, ?, ?, ?, ?)`,
+      [adminUser.name, adminUser.email, hashedAdminPassword, 'admin', 1],
+    );
+    console.log(`Added admin: ${adminUser.email}\n`);
+
+    console.log('Inserting specialities with fixed IDs...');
+    const specialityIdMap = {
+      'General physician': 7,
+      Gynecologist: 8,
+      Dermatologist: 9,
+      Pediatricians: 10,
+      Neurologist: 11,
+      Gastroenterologist: 12,
+    };
+
     for (const speciality of specialities) {
+      const fixedId = specialityIdMap[speciality.name];
       await connection.query(
-        'INSERT INTO specialities (name, image) VALUES (?, ?)',
-        [speciality.name, speciality.image],
+        'INSERT INTO specialities (id, name, image) VALUES (?, ?, ?)',
+        [fixedId, speciality.name, speciality.image],
       );
-      console.log(`Added: ${speciality.name}`);
+      console.log(`Added: ${speciality.name} (ID: ${fixedId})`);
     }
     console.log(`Inserted ${specialities.length} specialities\n`);
 
@@ -54,8 +78,8 @@ const seedDatabase = async () => {
 
       await connection.query(
         `INSERT INTO doctors
-        (name, email, password, image, speciality_id, degree, experience, about, fees, address_line1, address_line2, available)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        (name, email, password, image, speciality_id, degree, experience, about, fees, address_line1, address_line2, available, is_verified, verification_token, verification_token_expires)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           doctor.name,
           doctor.email,
@@ -69,6 +93,9 @@ const seedDatabase = async () => {
           doctor.address_line1,
           doctor.address_line2,
           doctor.available,
+          1,
+          null,
+          null,
         ],
       );
       console.log(`Added: ${doctor.name} (${doctor.speciality})`);
@@ -76,8 +103,18 @@ const seedDatabase = async () => {
     console.log(`Inserted ${doctors.length} doctors\n`);
 
     console.log('DATABASE SEEDED SUCCESSFULLY!\n');
+    console.log('═══════════════════════════════════');
+    console.log('ADMIN LOGIN CREDENTIALS:');
+    console.log('Email: admin@prescripto.com');
+    console.log('Password: admin123');
+    console.log('═══════════════════════════════════');
+    console.log('DOCTOR LOGIN (any seeded doctor):');
+    console.log('Email: richard@example.com');
+    console.log('Password: doctor123');
+    console.log('═══════════════════════════════════\n');
   } catch (error) {
     console.error('Seeding error:', error.message);
+    console.error('Full error:', error);
   } finally {
     if (connection) {
       await connection.end();

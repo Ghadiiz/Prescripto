@@ -1,75 +1,76 @@
-import { createContext, useEffect, useState } from "react";
-import { toast } from "react-toastify";
-import axios from 'axios'
+import { createContext, useEffect, useState } from 'react';
+import { toast } from 'react-toastify';
+import axios from 'axios';
 
-export const AppContext = createContext()
+export const AppContext = createContext();
 
 const AppContextProvider = (props) => {
+  const currencySymbol = '$';
+  const backendUrl = import.meta.env.VITE_BACKEND_URL;
 
-  const currencySymbol = '$'
-  const backendUrl = import.meta.env.VITE_BACKEND_URL
+  const [doctors, setDoctors] = useState([]);
+  const [token, setToken] = useState(
+    localStorage.getItem('token') ? localStorage.getItem('token') : '',
+  );
+  const [userData, setUserData] = useState(false);
 
-  const [doctors, setDoctors] = useState([])
-  const [token, setToken] = useState(localStorage.getItem('token') ? localStorage.getItem('token') : '')
-  const [userData, setUserData] = useState(false)
-
-  // ✅ YOUR ENDPOINT: GET /api/doctors
   const getDoctorsData = async () => {
     try {
-      const { data } = await axios.get(backendUrl + '/api/doctors')
+      const { data } = await axios.get(backendUrl + '/api/doctors');
       if (data.success) {
-        setDoctors(data.doctors)
+        setDoctors(data.doctors);
       } else {
-        toast.error(data.message)
+        toast.error(data.message);
       }
     } catch (error) {
-      console.log(error)
-      toast.error(error.message)
+      console.log(error);
+      toast.error(error.message);
     }
-  }
+  };
 
-  // ✅ YOUR ENDPOINT: GET /api/auth/profile (protected)
   const loadUserProfileData = async () => {
     try {
-      const { data } = await axios.get(backendUrl + '/api/auth/profile', { 
-        headers: { Authorization: `Bearer ${token}` }
-      })
+      const { data } = await axios.get(backendUrl + '/api/auth/profile', {
+        headers: { Authorization: `Bearer ${token}` },
+      });
       if (data.success) {
-        setUserData(data.user)
+        setUserData(data.user);
       } else {
-        toast.error(data.message)
+        toast.error(data.message);
       }
     } catch (error) {
-      console.log(error)
-      toast.error(error.message)
+      console.log(error);
+      toast.error(error.message);
     }
-  }
+  };
 
   useEffect(() => {
-    getDoctorsData()
-  }, [])
+    getDoctorsData();
+  }, []);
 
   useEffect(() => {
     if (token) {
-      loadUserProfileData()
+      loadUserProfileData();
     } else {
-      setUserData(false)
+      setUserData(false);
     }
-  }, [token])
+  }, [token]);
 
   const value = {
-    doctors, getDoctorsData,
+    doctors,
+    getDoctorsData,
     currencySymbol,
     backendUrl,
-    token, setToken,
-    userData, setUserData, loadUserProfileData
-  }
+    token,
+    setToken,
+    userData,
+    setUserData,
+    loadUserProfileData,
+  };
 
   return (
-    <AppContext.Provider value={value}>
-      {props.children}
-    </AppContext.Provider>
-  )
-}
+    <AppContext.Provider value={value}>{props.children}</AppContext.Provider>
+  );
+};
 
-export default AppContextProvider
+export default AppContextProvider;

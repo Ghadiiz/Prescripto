@@ -9,6 +9,22 @@ const router = express.Router();
 
 router.post('/login', adminAuthController.login);
 
+router.post(
+  '/create-admin',
+  adminAuthMiddleware,
+  adminAuthController.createAdmin,
+);
+
+router.get('/profile', adminAuthMiddleware, adminAuthController.getProfile);
+
+router.put('/profile', adminAuthMiddleware, adminAuthController.updateProfile);
+
+router.put(
+  '/change-password',
+  adminAuthMiddleware,
+  adminAuthController.changePassword,
+);
+
 router.get(
   '/doctors',
   adminAuthMiddleware,
@@ -46,6 +62,7 @@ router.get(
   adminAuthMiddleware,
   adminDashboardController.getDashboardStats,
 );
+
 router.get(
   '/appointments',
   adminAuthMiddleware,

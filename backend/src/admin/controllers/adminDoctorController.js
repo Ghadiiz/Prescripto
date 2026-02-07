@@ -23,18 +23,9 @@ export const addDoctor = async (req, res) => {
     const doctorData = req.body;
     const imageFile = req.file;
 
-    const { name, email, password, speciality_id, degree, experience, fees } =
-      doctorData;
+    const { name, email, speciality_id, degree, experience, fees } = doctorData;
 
-    if (
-      !name ||
-      !email ||
-      !password ||
-      !speciality_id ||
-      !degree ||
-      !experience ||
-      !fees
-    ) {
+    if (!name || !email || !speciality_id || !degree || !experience || !fees) {
       return res.status(400).json({
         success: false,
         message: 'All required fields must be provided',
@@ -45,7 +36,8 @@ export const addDoctor = async (req, res) => {
 
     res.status(201).json({
       success: true,
-      message: 'Doctor added successfully',
+      message:
+        'Doctor added successfully! Email sent to doctor to set password.',
       data: doctor,
     });
   } catch (error) {

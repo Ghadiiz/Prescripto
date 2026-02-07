@@ -25,7 +25,6 @@ const Login = () => {
           password,
         });
         if (data.success) {
-          // Admin: token is in data.data.token
           setAToken(data.data.token);
           localStorage.setItem('aToken', data.data.token);
           toast.success('Admin logged in successfully');
@@ -38,7 +37,6 @@ const Login = () => {
           password,
         });
         if (data.success) {
-          // ✅ FIXED: Doctor token is directly in data.token
           setDToken(data.token);
           localStorage.setItem('dToken', data.token);
           toast.success('Doctor logged in successfully');

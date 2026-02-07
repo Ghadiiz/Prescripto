@@ -12,12 +12,10 @@ const MyAppointments = () => {
   const [loading, setLoading] = useState(true);
   const [hiddenAppointments, setHiddenAppointments] = useState([]);
 
-  // Modal state
   const [showCancelModal, setShowCancelModal] = useState(false);
   const [selectedAppointmentId, setSelectedAppointmentId] = useState(null);
   const [cancellationReason, setCancellationReason] = useState('');
 
-  // Load hidden appointments from localStorage on mount
   useEffect(() => {
     const hidden = JSON.parse(
       localStorage.getItem('hiddenAppointments') || '[]',
@@ -25,7 +23,6 @@ const MyAppointments = () => {
     setHiddenAppointments(hidden);
   }, []);
 
-  // Fetch user's appointments
   const fetchAppointments = async () => {
     try {
       if (!token) {
@@ -39,7 +36,6 @@ const MyAppointments = () => {
       );
 
       if (data.success) {
-        // Filter out hidden appointments
         const hidden = JSON.parse(
           localStorage.getItem('hiddenAppointments') || '[]',
         );
@@ -58,21 +54,18 @@ const MyAppointments = () => {
     }
   };
 
-  // Open cancel modal
   const openCancelModal = (appointmentId) => {
     setSelectedAppointmentId(appointmentId);
     setCancellationReason('');
     setShowCancelModal(true);
   };
 
-  // Close cancel modal
   const closeCancelModal = () => {
     setShowCancelModal(false);
     setSelectedAppointmentId(null);
     setCancellationReason('');
   };
 
-  // Cancel appointment with reason
   const cancelAppointment = async () => {
     if (!cancellationReason.trim()) {
       toast.error('Please provide a cancellation reason');
@@ -89,7 +82,7 @@ const MyAppointments = () => {
       if (data.success) {
         toast.success('Appointment cancelled successfully');
         closeCancelModal();
-        fetchAppointments(); // Refresh the list
+        fetchAppointments();
       } else {
         toast.error(data.message);
       }
@@ -101,20 +94,15 @@ const MyAppointments = () => {
     }
   };
 
-  // Remove appointment from view (persist in localStorage)
   const removeAppointment = (appointmentId) => {
-    // Get current hidden list
     const hidden = JSON.parse(
       localStorage.getItem('hiddenAppointments') || '[]',
     );
 
-    // Add this appointment ID to hidden list
     const updatedHidden = [...hidden, appointmentId];
 
-    // Save to localStorage
     localStorage.setItem('hiddenAppointments', JSON.stringify(updatedHidden));
 
-    // Update state
     setHiddenAppointments(updatedHidden);
     setAppointments((prev) => prev.filter((app) => app._id !== appointmentId));
 
@@ -178,7 +166,6 @@ const MyAppointments = () => {
                   {item.slotDate} | {item.slotTime}
                 </p>
 
-                {/* ✅ ADD THIS - Payment Method Display */}
                 <p className="mt-1">
                   <span className="text-sm text-[#3C3C3C] font-medium">
                     Payment:
@@ -220,6 +207,13 @@ const MyAppointments = () => {
               </div>
 
               <div className="flex flex-col gap-2 justify-end text-sm text-center">
+                <button
+                  onClick={() => navigate(`/appointment-details/${item._id}`)}
+                  className="sm:min-w-48 py-2 px-4 border border-primary text-primary hover:bg-primary hover:text-white transition-all duration-300 rounded"
+                >
+                  View Details
+                </button>
+
                 {item.status?.toLowerCase() === 'cancelled' ? (
                   <>
                     <button className="sm:min-w-48 py-2 px-4 border border-red-500 text-red-500 bg-red-50 rounded cursor-not-allowed">
@@ -250,7 +244,6 @@ const MyAppointments = () => {
         </div>
       )}
 
-      {/* Cancel Appointment Modal */}
       {showCancelModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-lg p-6 max-w-md w-full">

@@ -15,7 +15,6 @@ const AdminContextProvider = (props) => {
   const [doctors, setDoctors] = useState([]);
   const [dashData, setDashData] = useState(false);
 
-  // Getting all Doctors data from Database using API
   const getAllDoctors = async () => {
     try {
       const { data } = await axios.get(backendUrl + '/api/admin/doctors', {
@@ -32,7 +31,6 @@ const AdminContextProvider = (props) => {
     }
   };
 
-  // Function to change doctor availability using API
   const changeAvailability = async (docId) => {
     try {
       const { data } = await axios.put(
@@ -52,8 +50,6 @@ const AdminContextProvider = (props) => {
     }
   };
 
-  // ✅ NEW: Delete doctor function
-  // Delete doctor function
   const deleteDoctor = async (docId) => {
     try {
       const { data } = await axios.delete(
@@ -68,7 +64,7 @@ const AdminContextProvider = (props) => {
       }
     } catch (error) {
       console.error('Delete doctor error:', error);
-      // Better error message
+
       const errorMsg =
         error.response?.data?.message ||
         'Cannot delete doctor. They may have existing appointments.';
@@ -76,7 +72,6 @@ const AdminContextProvider = (props) => {
     }
   };
 
-  // ✅ NEW: Update doctor function
   const updateDoctor = async (docId, formData) => {
     try {
       const { data } = await axios.put(
@@ -99,7 +94,6 @@ const AdminContextProvider = (props) => {
     }
   };
 
-  // Getting all appointment data from Database using API
   const getAllAppointments = async () => {
     try {
       const { data } = await axios.get(backendUrl + '/api/admin/appointments', {
@@ -117,7 +111,6 @@ const AdminContextProvider = (props) => {
     }
   };
 
-  // Getting Admin Dashboard data from Database using API
   const getDashData = async () => {
     try {
       const { data } = await axios.get(backendUrl + '/api/admin/dashboard', {
@@ -143,8 +136,8 @@ const AdminContextProvider = (props) => {
     doctors,
     getAllDoctors,
     changeAvailability,
-    deleteDoctor, // NEW
-    updateDoctor, // NEW
+    deleteDoctor,
+    updateDoctor,
     appointments,
     getAllAppointments,
     getDashData,

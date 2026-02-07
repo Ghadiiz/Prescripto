@@ -17,7 +17,6 @@ const DoctorDashboard = () => {
     }
   }, [dToken]);
 
-  // Format date helper
   const formatDate = (dateString) => {
     if (!dateString) return '-';
     const date = new Date(dateString);
@@ -104,7 +103,6 @@ const DoctorDashboard = () => {
                     </p>
                   </div>
 
-                  {/* ✅ FIXED: Show status clearly */}
                   {item.status === 'cancelled' ? (
                     <p className="text-red-500 text-xs font-semibold bg-red-50 px-3 py-1 rounded-full">
                       Cancelled

@@ -24,7 +24,7 @@ export const registerUserService = async (userData) => {
     const hashedPassword = await bcrypt.hash(userData.password, 10);
 
     const verificationToken = crypto.randomBytes(32).toString('hex');
-    const verificationTokenExpires = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
+    const verificationTokenExpires = new Date(Date.now() + 24 * 60 * 60 * 1000);
 
     const [result] = await db.query(
       `INSERT INTO users 

@@ -205,7 +205,7 @@ const getAvailableSlots = async (doctorId, date) => {
   }
 
   while (start < end) {
-    const timeSlot = start.toTimeString().slice(0, 8); // HH:MM:SS format
+    const timeSlot = start.toTimeString().slice(0, 8);
 
     if (!bookedSlots.includes(timeSlot)) {
       slots.push(convertTo12Hour(timeSlot));
@@ -223,7 +223,6 @@ const createCheckoutPreview = async (
   appointmentDate,
   appointmentTime,
 ) => {
-  // Get full doctor details
   const { getDB } = await import('../../config/mysql.js');
   const pool = getDB();
 
@@ -244,7 +243,6 @@ const createCheckoutPreview = async (
     throw new Error('Doctor is not available');
   }
 
-  // Get user details
   const userQuery = `
     SELECT id, name, email, phone, image
     FROM users
@@ -257,13 +255,11 @@ const createCheckoutPreview = async (
     throw new Error('User not found');
   }
 
-  // Convert time if needed
   let timeIn24Hour = appointmentTime;
   if (appointmentTime.includes('AM') || appointmentTime.includes('PM')) {
     timeIn24Hour = convertTo24Hour(appointmentTime);
   }
 
-  // Return checkout preview
   return {
     doctor: {
       _id: fullDoctor.id,

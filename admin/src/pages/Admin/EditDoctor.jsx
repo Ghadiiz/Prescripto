@@ -25,7 +25,6 @@ const EditDoctor = () => {
   const { backendUrl, aToken, doctors, getAllDoctors } =
     useContext(AdminContext);
 
-  // Load doctor data
   useEffect(() => {
     const loadDoctorData = async () => {
       if (!doctors || doctors.length === 0) {
@@ -44,7 +43,6 @@ const EditDoctor = () => {
         setDegree(doctor.degree || '');
         setCurrentImage(doctor.image || '');
 
-        // ✅ FIXED: Handle null address values
         if (doctor.address) {
           try {
             let addr;
@@ -80,7 +78,6 @@ const EditDoctor = () => {
     loadDoctorData();
   }, [id, doctors]);
 
-  // Fetch doctor directly from API if not in context
   const fetchDoctorFromAPI = async () => {
     try {
       const { data } = await axios.get(backendUrl + `/api/admin/doctors`, {
@@ -100,7 +97,6 @@ const EditDoctor = () => {
           setDegree(doctor.degree || '');
           setCurrentImage(doctor.image || '');
 
-          // ✅ FIXED: Handle null address values
           if (doctor.address) {
             try {
               let addr;

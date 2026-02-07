@@ -19,9 +19,8 @@ const Appointment = () => {
   const [selectedDate, setSelectedDate] = useState('');
   const [selectedTime, setSelectedTime] = useState('');
   const [loading, setLoading] = useState(true);
-  const [paymentMethod, setPaymentMethod] = useState('cash'); // ✅ ADD THIS
+  const [paymentMethod, setPaymentMethod] = useState('cash');
 
-  // Fetch doctor details
   const fetchDocInfo = async () => {
     try {
       const { data } = await axios.get(`${backendUrl}/api/doctors/${docId}`);
@@ -38,7 +37,6 @@ const Appointment = () => {
     }
   };
 
-  // Generate next 7 days
   const generateAvailableDates = () => {
     const dates = [];
     const today = new Date();
@@ -58,7 +56,6 @@ const Appointment = () => {
     }
   };
 
-  // Fetch available times for selected date
   const fetchAvailableTimes = async (date) => {
     try {
       const { data } = await axios.get(
@@ -82,7 +79,6 @@ const Appointment = () => {
     }
   };
 
-  // ✅ UPDATED: Book appointment with payment method
   const bookAppointment = async () => {
     if (!token) {
       toast.warning('Please login to book appointment');
@@ -101,7 +97,7 @@ const Appointment = () => {
           doctorId: docId,
           slotDate: selectedDate,
           slotTime: selectedTime,
-          payment: paymentMethod === 'online', // ✅ ADD THIS - false for cash, true for online
+          payment: paymentMethod === 'online',
         },
         { headers: { Authorization: `Bearer ${token}` } },
       );
@@ -291,7 +287,6 @@ const Appointment = () => {
           )}
         </div>
 
-        {/* ✅ PAYMENT METHOD SELECTION */}
         <div className="mt-6 mb-4">
           <p className="text-gray-700 font-medium mb-3">Payment Method</p>
           <div className="flex gap-4">

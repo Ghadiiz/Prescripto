@@ -31,6 +31,12 @@ const specialities = [
   },
 ];
 
+const adminUser = {
+  name: 'Admin User',
+  email: 'admin@prescripto.com',
+  password: 'admin123',
+};
+
 const doctors = [
   {
     name: 'Dr. Richard James',
@@ -290,4 +296,4 @@ const doctors = [
   },
 ];
 
-export { specialities, doctors };
+export { specialities, doctors, adminUser };

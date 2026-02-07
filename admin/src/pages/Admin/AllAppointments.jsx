@@ -13,7 +13,6 @@ const AllAppointments = () => {
     }
   }, [aToken]);
 
-  // Format date helper
   const formatDate = (dateString) => {
     const date = new Date(dateString);
     const day = date.getDate();
@@ -62,7 +61,6 @@ const AllAppointments = () => {
             >
               <p className="max-sm:hidden">{index + 1}</p>
 
-              {/* Patient Info */}
               <div className="flex items-center gap-2">
                 <img
                   className="w-8 rounded-full"
@@ -72,18 +70,14 @@ const AllAppointments = () => {
                 <p>{item.patient?.name || 'Unknown Patient'}</p>
               </div>
 
-              {/* Age */}
               <p className="max-sm:hidden">
                 {item.patient?.dob ? calculateAge(item.patient.dob) : '-'}
               </p>
 
-              {/* Date */}
               <p>{formatDate(item.appointmentDate)}</p>
 
-              {/* Time */}
               <p>{item.appointmentTime}</p>
 
-              {/* Doctor Info */}
               <div className="flex items-center gap-2">
                 <img
                   className="w-8 rounded-full bg-gray-200"
@@ -93,13 +87,11 @@ const AllAppointments = () => {
                 <p>{item.doctor?.name || 'Unknown Doctor'}</p>
               </div>
 
-              {/* Fees */}
               <p>
                 {currency}
                 {item.doctor?.fees || item.fees || '50'}
               </p>
 
-              {/* Status - View Only */}
               {item.status === 'cancelled' ? (
                 <p className="text-red-400 text-xs font-medium">Cancelled</p>
               ) : item.status === 'completed' ? (

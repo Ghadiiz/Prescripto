@@ -23,7 +23,6 @@ const createAppointment = async (
   return result.insertId;
 };
 
-// Find appointment by ID with doctor details
 const findAppointmentById = async (appointmentId) => {
   const pool = getDB();
   const query = `

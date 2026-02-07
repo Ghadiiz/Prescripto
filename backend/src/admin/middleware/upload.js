@@ -12,11 +12,19 @@ const storage = multer.diskStorage({
 });
 
 const fileFilter = (req, file, cb) => {
-  const allowedTypes = /jpeg|jpg|png|gif/;
+  const allowedTypes = /jpeg|jpg|png|gif|svg/;
   const extname = allowedTypes.test(
     path.extname(file.originalname).toLowerCase(),
   );
-  const mimetype = allowedTypes.test(file.mimetype);
+
+  const allowedMimeTypes = [
+    'image/jpeg',
+    'image/jpg',
+    'image/png',
+    'image/gif',
+    'image/svg+xml',
+  ];
+  const mimetype = allowedMimeTypes.includes(file.mimetype);
 
   if (mimetype && extname) {
     return cb(null, true);

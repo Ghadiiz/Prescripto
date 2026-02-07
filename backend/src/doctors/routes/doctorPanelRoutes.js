@@ -11,11 +11,13 @@ import {
   getDashboard,
   getAppointmentDetails,
   updateAvailability,
+  setPassword,
 } from '../controllers/doctorAuthController.js';
 
 const router = express.Router();
 
 router.post('/login', doctorAuthController.login);
+router.post('/set-password', setPassword);
 
 router.get('/profile', authenticateDoctor, getProfile);
 router.put('/profile', authenticateDoctor, updateProfile);

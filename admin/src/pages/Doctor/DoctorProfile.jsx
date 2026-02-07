@@ -57,8 +57,6 @@ const DoctorProfile = () => {
           </div>
 
           <div className="flex-1 border border-stone-100 rounded-lg p-8 py-7 bg-white">
-            {/* Doc Info : name, degree, experience */}
-
             <p className="flex items-center gap-2 text-3xl font-medium text-gray-700">
               {profileData.name}
             </p>
@@ -71,7 +69,6 @@ const DoctorProfile = () => {
               </button>
             </div>
 
-            {/* Doc About */}
             <div>
               <p className="flex items-center gap-1 text-sm font-medium text-[#262626] mt-3">
                 About:

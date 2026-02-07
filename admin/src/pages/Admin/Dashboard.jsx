@@ -14,7 +14,6 @@ const Dashboard = () => {
     }
   }, [aToken]);
 
-  // Format date helper
   const formatDate = (dateString) => {
     const date = new Date(dateString);
     const day = date.getDate();
@@ -48,7 +47,6 @@ const Dashboard = () => {
   return (
     <div className="m-5">
       <div className="flex flex-wrap gap-3">
-        {/* Total Doctors */}
         <div className="flex items-center gap-2 bg-white p-4 min-w-52 rounded border-2 border-gray-100 cursor-pointer hover:scale-105 transition-all">
           <img className="w-14" src={assets.doctor_icon} alt="" />
           <div>
@@ -59,7 +57,6 @@ const Dashboard = () => {
           </div>
         </div>
 
-        {/* Active Doctors */}
         <div className="flex items-center gap-2 bg-white p-4 min-w-52 rounded border-2 border-gray-100 cursor-pointer hover:scale-105 transition-all">
           <img className="w-14" src={assets.doctor_icon} alt="" />
           <div>
@@ -70,7 +67,6 @@ const Dashboard = () => {
           </div>
         </div>
 
-        {/* Total Appointments */}
         <div className="flex items-center gap-2 bg-white p-4 min-w-52 rounded border-2 border-gray-100 cursor-pointer hover:scale-105 transition-all">
           <img className="w-14" src={assets.appointments_icon} alt="" />
           <div>
@@ -81,7 +77,6 @@ const Dashboard = () => {
           </div>
         </div>
 
-        {/* Pending Appointments */}
         <div className="flex items-center gap-2 bg-white p-4 min-w-52 rounded border-2 border-gray-100 cursor-pointer hover:scale-105 transition-all">
           <img className="w-14" src={assets.appointments_icon} alt="" />
           <div>
@@ -92,7 +87,6 @@ const Dashboard = () => {
           </div>
         </div>
 
-        {/* Confirmed Appointments */}
         <div className="flex items-center gap-2 bg-white p-4 min-w-52 rounded border-2 border-gray-100 cursor-pointer hover:scale-105 transition-all">
           <img className="w-14" src={assets.appointments_icon} alt="" />
           <div>
@@ -103,7 +97,6 @@ const Dashboard = () => {
           </div>
         </div>
 
-        {/* Cancelled Appointments */}
         <div className="flex items-center gap-2 bg-white p-4 min-w-52 rounded border-2 border-gray-100 cursor-pointer hover:scale-105 transition-all">
           <img className="w-14" src={assets.appointments_icon} alt="" />
           <div>
@@ -114,7 +107,6 @@ const Dashboard = () => {
           </div>
         </div>
 
-        {/* Total Users/Patients */}
         <div className="flex items-center gap-2 bg-white p-4 min-w-52 rounded border-2 border-gray-100 cursor-pointer hover:scale-105 transition-all">
           <img className="w-14" src={assets.patients_icon} alt="" />
           <div>
@@ -125,7 +117,6 @@ const Dashboard = () => {
           </div>
         </div>
 
-        {/* Total Revenue */}
         <div className="flex items-center gap-2 bg-white p-4 min-w-52 rounded border-2 border-gray-100 cursor-pointer hover:scale-105 transition-all">
           <img className="w-14" src={assets.earning_icon} alt="" />
           <div>
@@ -167,7 +158,7 @@ const Dashboard = () => {
                     {item.appointmentTime}
                   </p>
                 </div>
-                {/* Status Display Only - No Actions */}
+
                 {item.status === 'cancelled' ? (
                   <p className="text-red-400 text-xs font-medium">Cancelled</p>
                 ) : item.status === 'completed' ? (

@@ -8,7 +8,7 @@ const AddDoctor = () => {
   const [docImg, setDocImg] = useState(false);
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
+
   const [experience, setExperience] = useState('1 Year');
   const [fees, setFees] = useState('');
   const [about, setAbout] = useState('');
@@ -32,7 +32,7 @@ const AddDoctor = () => {
       formData.append('image', docImg);
       formData.append('name', name);
       formData.append('email', email);
-      formData.append('password', password);
+
       formData.append('experience', experience);
       formData.append('fees', Number(fees));
       formData.append('about', about);
@@ -55,7 +55,7 @@ const AddDoctor = () => {
         toast.success(data.message);
         setDocImg(false);
         setName('');
-        setPassword('');
+
         setEmail('');
         setAddress1('');
         setAddress2('');
@@ -120,18 +120,10 @@ const AddDoctor = () => {
                 placeholder="Email"
                 required
               />
-            </div>
 
-            <div className="flex-1 flex flex-col gap-1">
-              <p>Doctor Password</p>
-              <input
-                onChange={(e) => setPassword(e.target.value)}
-                value={password}
-                className="border rounded px-3 py-2"
-                type="password"
-                placeholder="Password"
-                required
-              />
+              <p className="text-xs text-gray-500 mt-1">
+                📧 Password setup link will be sent to this email
+              </p>
             </div>
 
             <div className="flex-1 flex flex-col gap-1">

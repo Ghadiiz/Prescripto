@@ -15,6 +15,16 @@ export const loginDoctor = async (email, password) => {
 
   const doctor = doctors[0];
 
+  if (!doctor.password) {
+    throw new Error(
+      'Please set your password first. Check your email for the setup link.',
+    );
+  }
+
+  if (!doctor.is_verified) {
+    throw new Error('Please verify your email and set password first.');
+  }
+
   const isPasswordValid = await bcrypt.compare(password, doctor.password);
 
   if (!isPasswordValid) {
@@ -117,4 +127,33 @@ export const toggleDoctorAvailability = async (doctorId, available) => {
   ]);
 
   return true;
+};
+
+export const setDoctorPassword = async (token, password) => {
+  const db = getDB();
+
+  const [doctors] = await db.query(
+    'SELECT * FROM doctors WHERE verification_token = ? AND verification_token_expires > NOW()',
+    [token],
+  );
+
+  if (doctors.length === 0) {
+    throw new Error('INVALID_TOKEN');
+  }
+
+  const doctor = doctors[0];
+
+  const hashedPassword = await bcrypt.hash(password, 10);
+
+  await db.query(
+    `UPDATE doctors 
+     SET password = ?, 
+         is_verified = 1, 
+         verification_token = NULL, 
+         verification_token_expires = NULL 
+     WHERE id = ?`,
+    [hashedPassword, doctor.id],
+  );
+
+  return { success: true };
 };

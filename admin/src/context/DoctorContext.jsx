@@ -14,7 +14,6 @@ const DoctorContextProvider = (props) => {
   const [dashData, setDashData] = useState(false);
   const [profileData, setProfileData] = useState(false);
 
-  // Getting Doctor appointment data from Database using API
   const getAppointments = async () => {
     try {
       const { data } = await axios.get(
@@ -25,7 +24,6 @@ const DoctorContextProvider = (props) => {
       );
 
       if (data.success) {
-        // ✅ FIXED: Your backend returns data.appointments directly
         const appointmentsList = data.appointments || [];
         setAppointments(appointmentsList.reverse());
       } else {
@@ -37,14 +35,12 @@ const DoctorContextProvider = (props) => {
     }
   };
 
-  // Getting Doctor profile data from Database using API
   const getProfileData = async () => {
     try {
       const { data } = await axios.get(backendUrl + '/api/doctor/profile', {
         headers: { Authorization: `Bearer ${dToken}` },
       });
 
-      // ✅ FIXED: Your backend returns data.doctor
       const profile = data.doctor;
       console.log('Profile data:', profile);
       setProfileData(profile);
@@ -54,7 +50,6 @@ const DoctorContextProvider = (props) => {
     }
   };
 
-  // Function to cancel doctor appointment using API
   const cancelAppointment = async (appointmentId) => {
     try {
       const { data } = await axios.put(
@@ -76,7 +71,6 @@ const DoctorContextProvider = (props) => {
     }
   };
 
-  // Function to Mark appointment completed using API
   const completeAppointment = async (appointmentId) => {
     try {
       const { data } = await axios.put(
@@ -98,7 +92,6 @@ const DoctorContextProvider = (props) => {
     }
   };
 
-  // Getting Doctor dashboard data using API
   const getDashData = async () => {
     try {
       const { data } = await axios.get(backendUrl + '/api/doctor/dashboard', {
@@ -106,7 +99,6 @@ const DoctorContextProvider = (props) => {
       });
 
       if (data.success) {
-        // ✅ FIXED: Your backend returns data.data for dashboard
         setDashData(data.data);
       } else {
         toast.error(data.message);

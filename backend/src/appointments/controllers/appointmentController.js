@@ -198,10 +198,9 @@ const getAvailableSlots = async (req, res) => {
 
 const getCheckoutPreview = async (req, res) => {
   try {
-    const userId = req.userId; // From auth middleware
+    const userId = req.userId;
     const { doctorId, appointmentDate, appointmentTime } = req.body;
 
-    // Validate required fields
     if (!doctorId || !appointmentDate || !appointmentTime) {
       return res.status(400).json({
         success: false,
