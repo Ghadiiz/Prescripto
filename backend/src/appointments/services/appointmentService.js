@@ -1,4 +1,5 @@
 import * as appointmentModel from '../models/appointmentModel.js';
+import { APPOINTMENT_STATUS } from '../../constants/appointmentStatus.js';
 
 const convertTo12Hour = (time24h) => {
   const [hours, minutes] = time24h.split(':');
@@ -144,11 +145,11 @@ const cancelAppointment = async (
     throw new Error('Unauthorized to cancel this appointment');
   }
 
-  if (appointment.status === 'cancelled') {
+  if (appointment.status === APPOINTMENT_STATUS.CANCELLED) {
     throw new Error('Appointment is already cancelled');
   }
 
-  if (appointment.status === 'completed') {
+  if (appointment.status === APPOINTMENT_STATUS.COMPLETED) {
     throw new Error('Cannot cancel completed appointment');
   }
 

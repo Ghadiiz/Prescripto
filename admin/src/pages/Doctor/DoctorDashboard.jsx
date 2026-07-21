@@ -103,15 +103,15 @@ const DoctorDashboard = () => {
                     </p>
                   </div>
 
-                  {item.status === 'cancelled' ? (
+                  {item.status?.toLowerCase() === 'cancelled' ? (
                     <p className="text-red-500 text-xs font-semibold bg-red-50 px-3 py-1 rounded-full">
                       Cancelled
                     </p>
-                  ) : item.status === 'completed' ? (
+                  ) : item.status?.toLowerCase() === 'completed' ? (
                     <p className="text-green-600 text-xs font-semibold bg-green-50 px-3 py-1 rounded-full">
                       Completed
                     </p>
-                  ) : item.status === 'pending' ? (
+                  ) : item.status?.toLowerCase() === 'pending' ? (
                     <div className="flex">
                       <img
                         onClick={() => cancelAppointment(item._id)}

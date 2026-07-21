@@ -92,15 +92,15 @@ const DoctorAppointments = () => {
                   View
                 </button>
 
-                {item.status === 'cancelled' ? (
+                {item.status?.toLowerCase() === 'cancelled' ? (
                   <p className="text-red-500 text-xs font-semibold bg-red-50 px-3 py-1.5 rounded">
                     Cancelled
                   </p>
-                ) : item.status === 'completed' ? (
+                ) : item.status?.toLowerCase() === 'completed' ? (
                   <p className="text-green-600 text-xs font-semibold bg-green-50 px-3 py-1.5 rounded">
                     Completed
                   </p>
-                ) : item.status === 'pending' ? (
+                ) : item.status?.toLowerCase() === 'pending' ? (
                   <>
                     <img
                       onClick={() => cancelAppointment(item._id)}

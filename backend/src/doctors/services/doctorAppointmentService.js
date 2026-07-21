@@ -1,4 +1,5 @@
 import { getDB } from '../../config/mysql.js';
+import { APPOINTMENT_STATUS } from '../../constants/appointmentStatus.js';
 
 export const getDoctorAppointments = async (doctorId, status = null) => {
   const db = getDB();
@@ -58,16 +59,16 @@ export const completeAppointment = async (appointmentId, doctorId) => {
 
   const appointment = appointments[0];
 
-  if (appointment.status === 'Cancelled') {
+  if (appointment.status === APPOINTMENT_STATUS.CANCELLED) {
     throw new Error('Cannot complete a cancelled appointment');
   }
 
-  if (appointment.status === 'Completed') {
+  if (appointment.status === APPOINTMENT_STATUS.COMPLETED) {
     throw new Error('Appointment already completed');
   }
 
   await db.query('UPDATE appointments SET status = ? WHERE id = ?', [
-    'Completed',
+    APPOINTMENT_STATUS.COMPLETED,
     appointmentId,
   ]);
 
@@ -88,16 +89,16 @@ export const cancelAppointment = async (appointmentId, doctorId) => {
 
   const appointment = appointments[0];
 
-  if (appointment.status === 'Completed') {
+  if (appointment.status === APPOINTMENT_STATUS.COMPLETED) {
     throw new Error('Cannot cancel a completed appointment');
   }
 
-  if (appointment.status === 'Cancelled') {
+  if (appointment.status === APPOINTMENT_STATUS.CANCELLED) {
     throw new Error('Appointment already cancelled');
   }
 
   await db.query('UPDATE appointments SET status = ? WHERE id = ?', [
-    'Cancelled',
+    APPOINTMENT_STATUS.CANCELLED,
     appointmentId,
   ]);
 
@@ -111,8 +112,8 @@ export const getDoctorDashboard = async (doctorId) => {
     `SELECT COALESCE(SUM(d.fees), 0) as total_earnings
      FROM appointments a
      JOIN doctors d ON a.doctor_id = d.id
-     WHERE a.doctor_id = ? AND a.status = 'Completed'`,
-    [doctorId],
+     WHERE a.doctor_id = ? AND a.status = ?`,
+    [doctorId, APPOINTMENT_STATUS.COMPLETED],
   );
 
   const [totalApts] = await db.query(

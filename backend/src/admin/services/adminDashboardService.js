@@ -23,11 +23,6 @@ export const getDashboardStats = async () => {
   );
   const pendingAppointments = pendingAppointmentsResult[0].count;
 
-  const [confirmedAppointmentsResult] = await pool.query(
-    "SELECT COUNT(*) as count FROM appointments WHERE status = 'confirmed'",
-  );
-  const confirmedAppointments = confirmedAppointmentsResult[0].count;
-
   const [completedAppointmentsResult] = await pool.query(
     "SELECT COUNT(*) as count FROM appointments WHERE status = 'completed'",
   );
@@ -47,7 +42,7 @@ export const getDashboardStats = async () => {
     SELECT SUM(d.fees) as revenue
     FROM appointments a
     JOIN doctors d ON a.doctor_id = d.id
-    WHERE a.status IN ('confirmed', 'completed')
+    WHERE a.status = 'completed'
   `);
   const totalRevenue = revenueResult[0].revenue || 0;
 
@@ -57,7 +52,6 @@ export const getDashboardStats = async () => {
     inactiveDoctors: totalDoctors - activeDoctors,
     totalAppointments,
     pendingAppointments,
-    confirmedAppointments,
     completedAppointments,
     cancelledAppointments,
     totalUsers,

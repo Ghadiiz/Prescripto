@@ -90,10 +90,10 @@ const Dashboard = () => {
         <div className="flex items-center gap-2 bg-white p-4 min-w-52 rounded border-2 border-gray-100 cursor-pointer hover:scale-105 transition-all">
           <img className="w-14" src={assets.appointments_icon} alt="" />
           <div>
-            <p className="text-xl font-semibold text-blue-600">
-              {dashData.confirmedAppointments || 0}
+            <p className="text-xl font-semibold text-green-600">
+              {dashData.completedAppointments || 0}
             </p>
-            <p className="text-gray-400">Confirmed</p>
+            <p className="text-gray-400">Completed</p>
           </div>
         </div>
 
