@@ -12,6 +12,14 @@ const authMiddleware = async (req, res, next) => {
     }
 
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
+
+    if (decoded.role !== 'patient') {
+      return res.status(403).json({
+        success: false,
+        message: 'Access denied. Not authorized as patient.',
+      });
+    }
+
     req.userId = decoded.id;
     next();
   } catch (error) {
