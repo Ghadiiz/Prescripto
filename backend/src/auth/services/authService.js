@@ -18,7 +18,7 @@ export const registerUserService = async (userData) => {
     );
 
     if (existingUser.length > 0) {
-      throw new Error('EMAIL_EXISTS');
+      return { alreadyExists: true };
     }
 
     const hashedPassword = await bcrypt.hash(userData.password, 10);

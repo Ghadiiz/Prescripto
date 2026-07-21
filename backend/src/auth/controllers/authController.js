@@ -60,6 +60,16 @@ export const registerUser = async (req, res) => {
 
     const result = await authService.registerUserService(userData);
 
+    if (result.alreadyExists) {
+      return res.status(201).json({
+        success: true,
+        message:
+          'Registration successful! Please check your email to verify your account.',
+        token: null,
+        needsVerification: true,
+      });
+    }
+
     res.status(201).json({
       success: true,
       message:
@@ -68,13 +78,6 @@ export const registerUser = async (req, res) => {
       needsVerification: true,
     });
   } catch (error) {
-    if (error.message === 'EMAIL_EXISTS') {
-      return res.status(400).json({
-        success: false,
-        message: 'Email already registered',
-      });
-    }
-
     console.error('Register error:', error);
     res.status(500).json({
       success: false,
