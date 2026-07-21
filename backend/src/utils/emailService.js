@@ -1,9 +1,11 @@
 import sgMail from '@sendgrid/mail';
+import validator from 'validator';
 
 sgMail.setApiKey(process.env.SENDGRID_API_KEY);
 
 export const sendVerificationEmail = async (email, name, token) => {
   const verificationUrl = `${process.env.FRONTEND_URL}/verify-email?token=${token}`;
+  const safeName = validator.escape(name || '');
 
   const msg = {
     to: email,
@@ -13,7 +15,7 @@ export const sendVerificationEmail = async (email, name, token) => {
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background-color: #f9f9f9;">
         <div style="background-color: white; padding: 30px; border-radius: 10px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
           <h2 style="color: #5f6fff; margin-bottom: 20px;">Welcome to Prescripto! 🏥</h2>
-          <p style="font-size: 16px; color: #333;">Hi <strong>${name}</strong>,</p>
+          <p style="font-size: 16px; color: #333;">Hi <strong>${safeName}</strong>,</p>
           <p style="font-size: 16px; color: #333; line-height: 1.6;">
             Thank you for registering with Prescripto. Please verify your email address by clicking the button below:
           </p>
@@ -51,6 +53,7 @@ export const sendVerificationEmail = async (email, name, token) => {
 
 export const sendPasswordResetEmail = async (email, name, token) => {
   const resetUrl = `${process.env.FRONTEND_URL}/reset-password?token=${token}`;
+  const safeName = validator.escape(name || '');
 
   const msg = {
     to: email,
@@ -60,7 +63,7 @@ export const sendPasswordResetEmail = async (email, name, token) => {
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background-color: #f9f9f9;">
         <div style="background-color: white; padding: 30px; border-radius: 10px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
           <h2 style="color: #5f6fff; margin-bottom: 20px;">Password Reset Request 🔐</h2>
-          <p style="font-size: 16px; color: #333;">Hi <strong>${name}</strong>,</p>
+          <p style="font-size: 16px; color: #333;">Hi <strong>${safeName}</strong>,</p>
           <p style="font-size: 16px; color: #333; line-height: 1.6;">
             We received a request to reset your password. Click the button below to set a new password:
           </p>
@@ -98,6 +101,8 @@ export const sendPasswordResetEmail = async (email, name, token) => {
 
 export const sendAdminCreatedEmail = async (email, name, password) => {
   const loginUrl = `${process.env.ADMIN_PANEL_URL || 'http://localhost:5174'}`;
+  const safeName = validator.escape(name || '');
+  const safeEmail = validator.escape(email || '');
 
   const msg = {
     to: email,
@@ -107,14 +112,14 @@ export const sendAdminCreatedEmail = async (email, name, password) => {
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background-color: #f9f9f9;">
         <div style="background-color: white; padding: 30px; border-radius: 10px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
           <h2 style="color: #5f6fff; margin-bottom: 20px;">Welcome to Prescripto Admin! 👨‍💼</h2>
-          <p style="font-size: 16px; color: #333;">Hi <strong>${name}</strong>,</p>
+          <p style="font-size: 16px; color: #333;">Hi <strong>${safeName}</strong>,</p>
           <p style="font-size: 16px; color: #333; line-height: 1.6;">
             You have been added as an administrator for Prescripto. You can now manage doctors, appointments, and view analytics.
           </p>
-          
+
           <div style="background-color: #f5f5f5; padding: 20px; border-radius: 8px; margin: 20px 0;">
             <h3 style="color: #333; margin-top: 0;">Your Login Credentials:</h3>
-            <p style="margin: 10px 0;"><strong>Email:</strong> ${email}</p>
+            <p style="margin: 10px 0;"><strong>Email:</strong> ${safeEmail}</p>
             <p style="margin: 10px 0;"><strong>Temporary Password:</strong> <code style="background-color: #e0e0e0; padding: 4px 8px; border-radius: 4px; font-size: 14px;">${password}</code></p>
           </div>
 
@@ -160,6 +165,8 @@ export const sendAdminCreatedEmail = async (email, name, password) => {
 
 export const sendDoctorSetPasswordEmail = async (email, name, token) => {
   const setPasswordUrl = `${process.env.ADMIN_PANEL_URL || 'http://localhost:5174'}/doctor/set-password?token=${token}`;
+  const safeName = validator.escape(name || '');
+  const safeEmail = validator.escape(email || '');
 
   const msg = {
     to: email,
@@ -168,8 +175,8 @@ export const sendDoctorSetPasswordEmail = async (email, name, token) => {
     html: `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background-color: #f9f9f9;">
         <div style="background-color: white; padding: 30px; border-radius: 10px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
-          <h2 style="color: #5f6fff; margin-bottom: 20px;">Welcome to Prescripto, Dr. ${name}! 👨‍⚕️</h2>
-          <p style="font-size: 16px; color: #333;">Hi <strong>Dr. ${name}</strong>,</p>
+          <h2 style="color: #5f6fff; margin-bottom: 20px;">Welcome to Prescripto, Dr. ${safeName}! 👨‍⚕️</h2>
+          <p style="font-size: 16px; color: #333;">Hi <strong>Dr. ${safeName}</strong>,</p>
           <p style="font-size: 16px; color: #333; line-height: 1.6;">
             You have been added to Prescripto as a doctor. To get started, please set your password by clicking the button below:
           </p>
@@ -186,7 +193,7 @@ export const sendDoctorSetPasswordEmail = async (email, name, token) => {
 
           <div style="background-color: #e8f5e9; border-left: 4px solid #4caf50; padding: 15px; margin: 20px 0;">
             <p style="margin: 0; color: #2e7d32; font-size: 14px;">
-              <strong>📧 Login Email:</strong> ${email}
+              <strong>📧 Login Email:</strong> ${safeEmail}
             </p>
           </div>
 
