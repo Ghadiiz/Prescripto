@@ -4,10 +4,11 @@ import * as adminDoctorController from '../controllers/adminDoctorController.js'
 import { adminAuthMiddleware } from '../middleware/adminAuthMiddleware.js';
 import { upload } from '../middleware/upload.js';
 import * as adminDashboardController from '../controllers/adminDashboardController.js';
+import { authLimiter } from '../../middleware/rateLimiters.js';
 
 const router = express.Router();
 
-router.post('/login', adminAuthController.login);
+router.post('/login', authLimiter, adminAuthController.login);
 
 router.post(
   '/create-admin',

@@ -1,6 +1,7 @@
 import express from 'express';
 import * as doctorAuthController from '../controllers/doctorAuthController.js';
 import { authenticateDoctor } from '../middleware/doctorAuthMiddleware.js';
+import { authLimiter } from '../../middleware/rateLimiters.js';
 import {
   login,
   getProfile,
@@ -16,7 +17,7 @@ import {
 
 const router = express.Router();
 
-router.post('/login', doctorAuthController.login);
+router.post('/login', authLimiter, doctorAuthController.login);
 router.post('/set-password', setPassword);
 
 router.get('/profile', authenticateDoctor, getProfile);

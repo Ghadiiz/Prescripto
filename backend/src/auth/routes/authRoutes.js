@@ -11,14 +11,15 @@ import {
   resetPassword,
 } from '../controllers/authController.js';
 import { authMiddleware } from '../middleware/authMiddleware.js';
+import { authLimiter, registerLimiter } from '../../middleware/rateLimiters.js';
 import multer from 'multer';
 
 const router = express.Router();
 
 const upload = multer({ dest: 'uploads/' });
 
-router.post('/register', registerUser);
-router.post('/login', loginUser);
+router.post('/register', registerLimiter, registerUser);
+router.post('/login', authLimiter, loginUser);
 router.get('/profile', authMiddleware, getUserProfile);
 router.put('/profile', authMiddleware, updateUserProfile);
 router.post(
@@ -28,8 +29,8 @@ router.post(
   uploadProfileImage,
 );
 router.post('/verify-email', verifyEmail);
-router.post('/resend-verification', resendVerificationEmail);
-router.post('/forgot-password', forgotPassword);
+router.post('/resend-verification', authLimiter, resendVerificationEmail);
+router.post('/forgot-password', authLimiter, forgotPassword);
 router.post('/reset-password', resetPassword);
 
 export default router;
