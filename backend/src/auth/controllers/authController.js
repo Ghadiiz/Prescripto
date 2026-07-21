@@ -1,4 +1,9 @@
 import * as authService from '../services/authService.js';
+import {
+  isValidEmail,
+  isStrongPassword,
+  isValidName,
+} from '../../utils/validators.js';
 
 export const registerUser = async (req, res) => {
   try {
@@ -20,9 +25,31 @@ export const registerUser = async (req, res) => {
       });
     }
 
+    if (!isValidEmail(email)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Please provide a valid email address',
+      });
+    }
+
+    if (!isStrongPassword(password)) {
+      return res.status(400).json({
+        success: false,
+        message:
+          'Password must be at least 8 characters and include a letter and a number',
+      });
+    }
+
+    if (!isValidName(name)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Name must be between 2 and 100 characters',
+      });
+    }
+
     const userData = {
-      name,
-      email,
+      name: name.trim(),
+      email: email.trim().toLowerCase(),
       password,
       phone: phone || null,
       address_line1: address_line1 || null,
