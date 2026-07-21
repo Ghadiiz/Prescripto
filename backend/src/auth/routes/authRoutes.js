@@ -12,11 +12,9 @@ import {
 } from '../controllers/authController.js';
 import { authMiddleware } from '../middleware/authMiddleware.js';
 import { authLimiter, registerLimiter } from '../../middleware/rateLimiters.js';
-import multer from 'multer';
+import { upload } from '../../admin/middleware/upload.js';
 
 const router = express.Router();
-
-const upload = multer({ dest: 'uploads/' });
 
 router.post('/register', registerLimiter, registerUser);
 router.post('/login', authLimiter, loginUser);

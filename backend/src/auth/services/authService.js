@@ -1,4 +1,5 @@
 import { getDB } from '../../config/mysql.js';
+import fs from 'fs';
 import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
 import * as userModel from '../models/userModel.js';
@@ -203,6 +204,12 @@ export const uploadUserProfileImageService = async (userId, file) => {
   const imageUpload = await cloudinary.uploader.upload(file.path, {
     resource_type: 'image',
   });
+
+  try {
+    fs.unlinkSync(file.path);
+  } catch (e) {
+    console.error('Temp file cleanup failed:', e.message);
+  }
 
   const imageUrl = imageUpload.secure_url;
 
