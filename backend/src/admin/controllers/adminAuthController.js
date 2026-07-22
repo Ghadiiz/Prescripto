@@ -1,6 +1,6 @@
 import * as adminAuthService from '../services/adminAuthService.js';
 
-export const login = async (req, res) => {
+export const login = async (req, res, next) => {
   try {
     const { email, password } = req.body;
 
@@ -19,15 +19,11 @@ export const login = async (req, res) => {
       data: result,
     });
   } catch (error) {
-    console.error('Admin login error:', error);
-    res.status(401).json({
-      success: false,
-      message: error.message || 'Login failed',
-    });
+    next(error);
   }
 };
 
-export const createAdmin = async (req, res) => {
+export const createAdmin = async (req, res, next) => {
   try {
     const { name, email, password } = req.body;
 
@@ -52,22 +48,11 @@ export const createAdmin = async (req, res) => {
       message: 'Admin created successfully! Email sent with login credentials.',
     });
   } catch (error) {
-    if (error.message === 'EMAIL_EXISTS') {
-      return res.status(400).json({
-        success: false,
-        message: 'An admin with this email already exists',
-      });
-    }
-
-    console.error('Create admin error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Failed to create admin',
-    });
+    next(error);
   }
 };
 
-export const getProfile = async (req, res) => {
+export const getProfile = async (req, res, next) => {
   try {
     const admin = await adminAuthService.getAdminProfile(req.adminId);
 
@@ -76,15 +61,11 @@ export const getProfile = async (req, res) => {
       admin,
     });
   } catch (error) {
-    console.error('Get admin profile error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Failed to fetch profile',
-    });
+    next(error);
   }
 };
 
-export const updateProfile = async (req, res) => {
+export const updateProfile = async (req, res, next) => {
   try {
     const { name, email } = req.body;
 
@@ -99,22 +80,11 @@ export const updateProfile = async (req, res) => {
       admin,
     });
   } catch (error) {
-    if (error.message === 'EMAIL_EXISTS') {
-      return res.status(400).json({
-        success: false,
-        message: 'Email already in use',
-      });
-    }
-
-    console.error('Update admin profile error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Failed to update profile',
-    });
+    next(error);
   }
 };
 
-export const changePassword = async (req, res) => {
+export const changePassword = async (req, res, next) => {
   try {
     const { oldPassword, newPassword } = req.body;
 
@@ -143,17 +113,6 @@ export const changePassword = async (req, res) => {
       message: 'Password changed successfully',
     });
   } catch (error) {
-    if (error.message === 'INVALID_PASSWORD') {
-      return res.status(401).json({
-        success: false,
-        message: 'Current password is incorrect',
-      });
-    }
-
-    console.error('Change password error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Failed to change password',
-    });
+    next(error);
   }
 };

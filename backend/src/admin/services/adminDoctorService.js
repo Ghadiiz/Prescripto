@@ -2,6 +2,7 @@ import { getDB } from '../../config/mysql.js';
 import { uploadToCloudinary } from '../../config/cloudinary.js';
 import crypto from 'crypto';
 import { sendDoctorSetPasswordEmail } from '../../utils/emailService.js';
+import { AppError } from '../../utils/AppError.js';
 
 export const getAllDoctors = async () => {
   const pool = getDB();
@@ -69,7 +70,7 @@ export const addDoctor = async (doctorData, imageFile) => {
   ]);
 
   if (existing.length > 0) {
-    throw new Error('Doctor with this email already exists');
+    throw new AppError('Doctor with this email already exists', 409);
   }
 
   const verificationToken = crypto.randomBytes(32).toString('hex');
@@ -152,7 +153,7 @@ export const updateDoctor = async (doctorId, doctorData, imageFile) => {
   );
 
   if (existingDoctor.length === 0) {
-    throw new Error('Doctor not found');
+    throw new AppError('Doctor not found', 404);
   }
 
   let imageUrl = existingDoctor[0].image;
@@ -252,7 +253,7 @@ export const deleteDoctor = async (doctorId) => {
   );
 
   if (existingDoctor.length === 0) {
-    throw new Error('Doctor not found');
+    throw new AppError('Doctor not found', 404);
   }
 
   const [appointments] = await pool.query(
@@ -261,8 +262,9 @@ export const deleteDoctor = async (doctorId) => {
   );
 
   if (appointments[0].count > 0) {
-    throw new Error(
+    throw new AppError(
       'Cannot delete doctor with existing appointments. Set as unavailable instead.',
+      400,
     );
   }
 
@@ -280,7 +282,7 @@ export const toggleDoctorAvailability = async (doctorId) => {
   );
 
   if (existingDoctor.length === 0) {
-    throw new Error('Doctor not found');
+    throw new AppError('Doctor not found', 404);
   }
 
   const currentStatus = existingDoctor[0].available;

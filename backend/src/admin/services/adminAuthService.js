@@ -2,6 +2,7 @@ import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
 import { getDB } from '../../config/mysql.js';
 import { sendAdminCreatedEmail } from '../../utils/emailService.js';
+import { AppError } from '../../utils/AppError.js';
 
 export const loginAdmin = async (email, password) => {
   const pool = getDB();
@@ -12,7 +13,7 @@ export const loginAdmin = async (email, password) => {
   );
 
   if (users.length === 0) {
-    throw new Error('Invalid credentials or not an admin');
+    throw new AppError('Invalid credentials or not an admin', 401);
   }
 
   const admin = users[0];
@@ -20,7 +21,7 @@ export const loginAdmin = async (email, password) => {
   const isPasswordValid = await bcrypt.compare(password, admin.password);
 
   if (!isPasswordValid) {
-    throw new Error('Invalid credentials');
+    throw new AppError('Invalid credentials', 401);
   }
 
   const token = jwt.sign(
@@ -53,7 +54,7 @@ export const createAdmin = async (adminData) => {
   ]);
 
   if (existing.length > 0) {
-    throw new Error('EMAIL_EXISTS');
+    throw new AppError('An admin with this email already exists', 400);
   }
 
   const hashedPassword = await bcrypt.hash(password, 10);
@@ -81,7 +82,7 @@ export const getAdminProfile = async (adminId) => {
   );
 
   if (admins.length === 0) {
-    throw new Error('Admin not found');
+    throw new AppError('Admin not found', 404);
   }
 
   return admins[0];
@@ -98,7 +99,7 @@ export const updateAdminProfile = async (adminId, profileData) => {
     );
 
     if (existing.length > 0) {
-      throw new Error('EMAIL_EXISTS');
+      throw new AppError('Email already in use', 400);
     }
   }
 
@@ -122,7 +123,7 @@ export const changeAdminPassword = async (
   ]);
 
   if (admins.length === 0) {
-    throw new Error('Admin not found');
+    throw new AppError('Admin not found', 404);
   }
 
   const admin = admins[0];
@@ -130,7 +131,7 @@ export const changeAdminPassword = async (
   const isPasswordValid = await bcrypt.compare(oldPassword, admin.password);
 
   if (!isPasswordValid) {
-    throw new Error('INVALID_PASSWORD');
+    throw new AppError('Current password is incorrect', 401);
   }
 
   const hashedNewPassword = await bcrypt.hash(newPassword, 10);

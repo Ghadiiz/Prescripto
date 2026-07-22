@@ -1,6 +1,6 @@
 import * as adminDashboardService from '../services/adminDashboardService.js';
 
-export const getDashboardStats = async (req, res) => {
+export const getDashboardStats = async (req, res, next) => {
   try {
     const stats = await adminDashboardService.getDashboardStats();
 
@@ -9,15 +9,11 @@ export const getDashboardStats = async (req, res) => {
       data: stats,
     });
   } catch (error) {
-    console.error('Error fetching dashboard stats:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Failed to fetch dashboard statistics',
-    });
+    next(error);
   }
 };
 
-export const getAllAppointments = async (req, res) => {
+export const getAllAppointments = async (req, res, next) => {
   try {
     const appointments = await adminDashboardService.getAllAppointments();
 
@@ -27,10 +23,6 @@ export const getAllAppointments = async (req, res) => {
       data: appointments,
     });
   } catch (error) {
-    console.error('Error fetching appointments:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Failed to fetch appointments',
-    });
+    next(error);
   }
 };

@@ -1,6 +1,6 @@
 import * as adminDoctorService from '../services/adminDoctorService.js';
 
-export const getAllDoctors = async (req, res) => {
+export const getAllDoctors = async (req, res, next) => {
   try {
     const doctors = await adminDoctorService.getAllDoctors();
 
@@ -10,15 +10,11 @@ export const getAllDoctors = async (req, res) => {
       data: doctors,
     });
   } catch (error) {
-    console.error('Error fetching doctors:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Failed to fetch doctors',
-    });
+    next(error);
   }
 };
 
-export const addDoctor = async (req, res) => {
+export const addDoctor = async (req, res, next) => {
   try {
     const doctorData = req.body;
     const imageFile = req.file;
@@ -41,15 +37,11 @@ export const addDoctor = async (req, res) => {
       data: doctor,
     });
   } catch (error) {
-    console.error('Error adding doctor:', error);
-    res.status(500).json({
-      success: false,
-      message: error.message || 'Failed to add doctor',
-    });
+    next(error);
   }
 };
 
-export const updateDoctor = async (req, res) => {
+export const updateDoctor = async (req, res, next) => {
   try {
     const { id } = req.params;
     const doctorData = req.body;
@@ -67,15 +59,11 @@ export const updateDoctor = async (req, res) => {
       data: doctor,
     });
   } catch (error) {
-    console.error('Error updating doctor:', error);
-    res.status(500).json({
-      success: false,
-      message: error.message || 'Failed to update doctor',
-    });
+    next(error);
   }
 };
 
-export const deleteDoctor = async (req, res) => {
+export const deleteDoctor = async (req, res, next) => {
   try {
     const { id } = req.params;
 
@@ -86,15 +74,11 @@ export const deleteDoctor = async (req, res) => {
       message: 'Doctor deleted successfully',
     });
   } catch (error) {
-    console.error('Error deleting doctor:', error);
-    res.status(500).json({
-      success: false,
-      message: error.message || 'Failed to delete doctor',
-    });
+    next(error);
   }
 };
 
-export const toggleAvailability = async (req, res) => {
+export const toggleAvailability = async (req, res, next) => {
   try {
     const { id } = req.params;
 
@@ -109,10 +93,6 @@ export const toggleAvailability = async (req, res) => {
       },
     });
   } catch (error) {
-    console.error('Error toggling availability:', error);
-    res.status(500).json({
-      success: false,
-      message: error.message || 'Failed to toggle availability',
-    });
+    next(error);
   }
 };
