@@ -78,8 +78,8 @@ const seedDatabase = async () => {
 
       await connection.query(
         `INSERT INTO doctors
-        (name, email, password, image, speciality_id, degree, experience, about, fees, address_line1, address_line2, available, is_verified, verification_token, verification_token_expires)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        (name, email, password, image, speciality_id, degree, experience, about, fees, address_line1, address_line2, phone, available, is_verified, verification_token, verification_token_expires)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           doctor.name,
           doctor.email,
@@ -92,6 +92,7 @@ const seedDatabase = async () => {
           doctor.fees,
           doctor.address_line1,
           doctor.address_line2,
+          '+962 79 000 0000',
           doctor.available,
           1,
           null,

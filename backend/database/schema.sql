@@ -56,6 +56,7 @@ CREATE TABLE doctors (
   fees DECIMAL(10,2) NOT NULL,
   address_line1 VARCHAR(255),
   address_line2 VARCHAR(255),
+  phone VARCHAR(20),
   available BOOLEAN DEFAULT TRUE,
   is_verified BOOLEAN DEFAULT FALSE,
   verification_token VARCHAR(255),
