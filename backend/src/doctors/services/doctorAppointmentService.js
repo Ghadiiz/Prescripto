@@ -1,5 +1,6 @@
 import { getDB } from '../../config/mysql.js';
 import { APPOINTMENT_STATUS } from '../../constants/appointmentStatus.js';
+import { AppError } from '../../utils/AppError.js';
 
 export const getDoctorAppointments = async (doctorId, status = null) => {
   const db = getDB();
@@ -54,17 +55,17 @@ export const completeAppointment = async (appointmentId, doctorId) => {
   );
 
   if (appointments.length === 0) {
-    throw new Error('Appointment not found or unauthorized');
+    throw new AppError('Appointment not found or unauthorized', 404);
   }
 
   const appointment = appointments[0];
 
   if (appointment.status === APPOINTMENT_STATUS.CANCELLED) {
-    throw new Error('Cannot complete a cancelled appointment');
+    throw new AppError('Cannot complete a cancelled appointment', 400);
   }
 
   if (appointment.status === APPOINTMENT_STATUS.COMPLETED) {
-    throw new Error('Appointment already completed');
+    throw new AppError('Appointment already completed', 400);
   }
 
   await db.query('UPDATE appointments SET status = ? WHERE id = ?', [
@@ -84,17 +85,17 @@ export const cancelAppointment = async (appointmentId, doctorId) => {
   );
 
   if (appointments.length === 0) {
-    throw new Error('Appointment not found or unauthorized');
+    throw new AppError('Appointment not found or unauthorized', 404);
   }
 
   const appointment = appointments[0];
 
   if (appointment.status === APPOINTMENT_STATUS.COMPLETED) {
-    throw new Error('Cannot cancel a completed appointment');
+    throw new AppError('Cannot cancel a completed appointment', 400);
   }
 
   if (appointment.status === APPOINTMENT_STATUS.CANCELLED) {
-    throw new Error('Appointment already cancelled');
+    throw new AppError('Appointment already cancelled', 400);
   }
 
   await db.query('UPDATE appointments SET status = ? WHERE id = ?', [

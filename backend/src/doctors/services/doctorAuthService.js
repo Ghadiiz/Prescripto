@@ -1,6 +1,7 @@
 import { getDB } from '../../config/mysql.js';
 import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
+import { AppError } from '../../utils/AppError.js';
 
 export const loginDoctor = async (email, password) => {
   const db = getDB();
@@ -10,25 +11,26 @@ export const loginDoctor = async (email, password) => {
   ]);
 
   if (doctors.length === 0) {
-    throw new Error('Invalid credentials');
+    throw new AppError('Invalid credentials', 401);
   }
 
   const doctor = doctors[0];
 
   if (!doctor.password) {
-    throw new Error(
+    throw new AppError(
       'Please set your password first. Check your email for the setup link.',
+      403,
     );
   }
 
   if (!doctor.is_verified) {
-    throw new Error('Please verify your email and set password first.');
+    throw new AppError('Please verify your email and set password first.', 403);
   }
 
   const isPasswordValid = await bcrypt.compare(password, doctor.password);
 
   if (!isPasswordValid) {
-    throw new Error('Invalid credentials');
+    throw new AppError('Invalid credentials', 401);
   }
 
   const token = jwt.sign(
@@ -55,7 +57,7 @@ export const getDoctorProfile = async (doctorId) => {
   );
 
   if (doctors.length === 0) {
-    throw new Error('Doctor not found');
+    throw new AppError('Doctor not found', 404);
   }
 
   const doctor = doctors[0];
@@ -101,7 +103,7 @@ export const updateDoctorProfile = async (doctorId, updates) => {
   }
 
   if (updateFields.length === 0) {
-    throw new Error('No valid fields to update');
+    throw new AppError('No valid fields to update', 400);
   }
 
   values.push(doctorId);
@@ -118,7 +120,7 @@ export const toggleDoctorAvailability = async (doctorId, available) => {
   const db = getDB();
 
   if (typeof available !== 'boolean') {
-    throw new Error('Available must be a boolean value');
+    throw new AppError('Available must be a boolean value', 400);
   }
 
   await db.query('UPDATE doctors SET available = ? WHERE id = ?', [
@@ -138,7 +140,7 @@ export const setDoctorPassword = async (token, password) => {
   );
 
   if (doctors.length === 0) {
-    throw new Error('INVALID_TOKEN');
+    throw new AppError('Invalid or expired token', 400);
   }
 
   const doctor = doctors[0];

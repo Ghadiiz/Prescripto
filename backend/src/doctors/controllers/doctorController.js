@@ -1,6 +1,6 @@
 import * as doctorModel from '../models/doctorModel.js';
 
-export const getAllDoctors = async (req, res) => {
+export const getAllDoctors = async (req, res, next) => {
   try {
     const { speciality } = req.query;
     const doctors = await doctorModel.getAllDoctors(speciality);
@@ -28,15 +28,11 @@ export const getAllDoctors = async (req, res) => {
       doctors: transformedDoctors,
     });
   } catch (error) {
-    console.error('Error fetching doctors:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Failed to fetch doctors',
-    });
+    next(error);
   }
 };
 
-export const getDoctorById = async (req, res) => {
+export const getDoctorById = async (req, res, next) => {
   try {
     const { id } = req.params;
     const doc = await doctorModel.getDoctorById(id);
@@ -70,15 +66,11 @@ export const getDoctorById = async (req, res) => {
       doctor: transformedDoctor,
     });
   } catch (error) {
-    console.error('Error fetching doctor:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Failed to fetch doctor',
-    });
+    next(error);
   }
 };
 
-export const getAllSpecialities = async (req, res) => {
+export const getAllSpecialities = async (req, res, next) => {
   try {
     const specialities = await doctorModel.getAllSpecialities();
 
@@ -93,15 +85,11 @@ export const getAllSpecialities = async (req, res) => {
       specialities: transformedData,
     });
   } catch (error) {
-    console.error('Error fetching specialities:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Failed to fetch specialities',
-    });
+    next(error);
   }
 };
 
-export const searchDoctors = async (req, res) => {
+export const searchDoctors = async (req, res, next) => {
   try {
     const { query } = req.query;
 
@@ -137,10 +125,6 @@ export const searchDoctors = async (req, res) => {
       doctors: transformedDoctors,
     });
   } catch (error) {
-    console.error('Error searching doctors:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Failed to search doctors',
-    });
+    next(error);
   }
 };

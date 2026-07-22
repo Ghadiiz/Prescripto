@@ -2,7 +2,7 @@ import * as doctorAuthService from '../services/doctorAuthService.js';
 import * as doctorAppointmentService from '../services/doctorAppointmentService.js';
 import { getDB as pool } from '../../config/mysql.js';
 
-export const login = async (req, res) => {
+export const login = async (req, res, next) => {
   try {
     const { email, password } = req.body;
 
@@ -25,15 +25,11 @@ export const login = async (req, res) => {
       doctorId,
     });
   } catch (error) {
-    console.error('Doctor login error:', error);
-    res.status(401).json({
-      success: false,
-      message: error.message || 'Login failed',
-    });
+    next(error);
   }
 };
 
-export const getProfile = async (req, res) => {
+export const getProfile = async (req, res, next) => {
   try {
     const doctorId = req.doctor.id;
     const profile = await doctorAuthService.getDoctorProfile(doctorId);
@@ -43,15 +39,11 @@ export const getProfile = async (req, res) => {
       doctor: profile,
     });
   } catch (error) {
-    console.error('Get profile error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Failed to fetch profile',
-    });
+    next(error);
   }
 };
 
-export const updateProfile = async (req, res) => {
+export const updateProfile = async (req, res, next) => {
   try {
     const doctorId = req.doctor.id;
     const updates = req.body;
@@ -63,15 +55,11 @@ export const updateProfile = async (req, res) => {
       message: 'Profile updated successfully',
     });
   } catch (error) {
-    console.error('Update profile error:', error);
-    res.status(500).json({
-      success: false,
-      message: error.message || 'Failed to update profile',
-    });
+    next(error);
   }
 };
 
-export const getAppointments = async (req, res) => {
+export const getAppointments = async (req, res, next) => {
   try {
     const doctorId = req.doctor.id;
     const { status } = req.query;
@@ -87,15 +75,11 @@ export const getAppointments = async (req, res) => {
       appointments,
     });
   } catch (error) {
-    console.error('Get appointments error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Failed to fetch appointments',
-    });
+    next(error);
   }
 };
 
-export const completeAppointment = async (req, res) => {
+export const completeAppointment = async (req, res, next) => {
   try {
     const doctorId = req.doctor.id;
     const { id } = req.params;
@@ -107,15 +91,11 @@ export const completeAppointment = async (req, res) => {
       message: 'Appointment marked as completed',
     });
   } catch (error) {
-    console.error('Complete appointment error:', error);
-    res.status(400).json({
-      success: false,
-      message: error.message || 'Failed to complete appointment',
-    });
+    next(error);
   }
 };
 
-export const cancelAppointment = async (req, res) => {
+export const cancelAppointment = async (req, res, next) => {
   try {
     const doctorId = req.doctor.id;
     const { id } = req.params;
@@ -127,15 +107,11 @@ export const cancelAppointment = async (req, res) => {
       message: 'Appointment cancelled successfully',
     });
   } catch (error) {
-    console.error('Cancel appointment error:', error);
-    res.status(400).json({
-      success: false,
-      message: error.message || 'Failed to cancel appointment',
-    });
+    next(error);
   }
 };
 
-export const getDashboard = async (req, res) => {
+export const getDashboard = async (req, res, next) => {
   try {
     const doctorId = req.doctor.id;
 
@@ -147,15 +123,11 @@ export const getDashboard = async (req, res) => {
       data: dashboardData,
     });
   } catch (error) {
-    console.error('Get dashboard error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Failed to fetch dashboard data',
-    });
+    next(error);
   }
 };
 
-export const getAppointmentDetails = async (req, res) => {
+export const getAppointmentDetails = async (req, res, next) => {
   try {
     const appointmentId = req.params.id;
     const doctorId = req.doctor.id;
@@ -203,15 +175,11 @@ export const getAppointmentDetails = async (req, res) => {
       appointment: appointments[0],
     });
   } catch (error) {
-    console.error('Get appointment details error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Server error',
-    });
+    next(error);
   }
 };
 
-export const updateAvailability = async (req, res) => {
+export const updateAvailability = async (req, res, next) => {
   try {
     const doctorId = req.doctor.id;
     const { available } = req.body;
@@ -230,15 +198,11 @@ export const updateAvailability = async (req, res) => {
       message: `Availability ${available ? 'enabled' : 'disabled'} successfully`,
     });
   } catch (error) {
-    console.error('Update availability error:', error);
-    res.status(500).json({
-      success: false,
-      message: error.message || 'Failed to update availability',
-    });
+    next(error);
   }
 };
 
-export const setPassword = async (req, res) => {
+export const setPassword = async (req, res, next) => {
   try {
     const { token, password } = req.body;
 
@@ -263,17 +227,6 @@ export const setPassword = async (req, res) => {
       message: 'Password set successfully! You can now login.',
     });
   } catch (error) {
-    if (error.message === 'INVALID_TOKEN') {
-      return res.status(400).json({
-        success: false,
-        message: 'Invalid or expired token',
-      });
-    }
-
-    console.error('Set password error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Failed to set password',
-    });
+    next(error);
   }
 };
