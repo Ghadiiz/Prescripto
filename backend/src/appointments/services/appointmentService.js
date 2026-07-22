@@ -39,6 +39,7 @@ const formatAppointmentResponse = (appointment) => {
     slotDate: formatDate(appointment.appointment_date),
     slotTime: convertTo12Hour(appointment.appointment_time),
     status: appointment.status,
+    amount: appointment.amount,
     cancellationReason: appointment.cancellation_reason || null,
     doctor: {
       _id: appointment.doctor__id,

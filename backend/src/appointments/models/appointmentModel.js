@@ -9,8 +9,8 @@ const createAppointment = async (
 ) => {
   const pool = getDB();
   const query = `
-    INSERT INTO appointments (user_id, doctor_id, appointment_date, appointment_time, status)
-    VALUES (?, ?, ?, ?, 'pending')
+    INSERT INTO appointments (user_id, doctor_id, appointment_date, appointment_time, status, amount)
+    VALUES (?, ?, ?, ?, 'pending', ?)
   `;
 
   const [result] = await pool.query(query, [
@@ -33,6 +33,7 @@ const findAppointmentById = async (appointmentId) => {
       a.appointment_date,
       a.appointment_time,
       a.status,
+      a.amount,
       a.cancellation_reason,
       a.created_at,
       d.id AS doctor__id,
@@ -63,6 +64,7 @@ const findUserAppointments = async (userId) => {
       a.appointment_date,
       a.appointment_time,
       a.status,
+      a.amount,
       a.cancellation_reason,
       a.created_at,
       d.id AS doctor__id,
@@ -113,7 +115,7 @@ const cancelAppointment = async (appointmentId, cancellationReason) => {
 const checkDoctorAvailability = async (doctorId) => {
   const pool = getDB();
   const query = `
-    SELECT id, available
+    SELECT id, available, fees
     FROM doctors
     WHERE id = ?
   `;
