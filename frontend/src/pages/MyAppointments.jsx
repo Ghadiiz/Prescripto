@@ -159,6 +159,8 @@ const MyAppointments = () => {
                 <p className="text-[#464646] font-medium mt-1">Address:</p>
                 <p>{item.doctor.address.line1}</p>
                 <p>{item.doctor.address.line2}</p>
+                <p className="text-[#464646] font-medium mt-1">Phone:</p>
+                <p>{item.doctor.phone}</p>
                 <p className="mt-1">
                   <span className="text-sm text-[#3C3C3C] font-medium">
                     Date & Time:

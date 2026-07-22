@@ -168,15 +168,17 @@ const AppointmentDetail = () => {
             <p className="text-gray-600 mb-2">
               {appointment.doctor.degree} - {appointment.doctor.speciality}
             </p>
-            <p className="text-sm text-gray-500 mb-1">
-              Experience: {appointment.doctor.experience}
-            </p>
             <p className="text-sm text-gray-600 mt-3">
               <span className="font-medium">Address:</span>
               <br />
               {appointment.doctor.address.line1}
               <br />
               {appointment.doctor.address.line2}
+            </p>
+            <p className="text-sm text-gray-600 mt-2">
+              <span className="font-medium">Phone:</span>
+              <br />
+              {appointment.doctor.phone}
             </p>
           </div>
         </div>
