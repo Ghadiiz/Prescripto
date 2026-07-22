@@ -52,6 +52,7 @@ const formatAppointmentResponse = (appointment) => {
         line1: appointment.doctor_address_line1,
         line2: appointment.doctor_address_line2,
       },
+      phone: appointment.doctor_phone,
     },
   };
 };

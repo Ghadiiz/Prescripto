@@ -43,6 +43,7 @@ const findAppointmentById = async (appointmentId) => {
       d.fees AS doctor_fees,
       d.address_line1 AS doctor_address_line1,
       d.address_line2 AS doctor_address_line2,
+      d.phone AS doctor_phone,
       s.name AS doctor_speciality
     FROM appointments a
     JOIN doctors d ON a.doctor_id = d.id
@@ -74,6 +75,7 @@ const findUserAppointments = async (userId) => {
       d.fees AS doctor_fees,
       d.address_line1 AS doctor_address_line1,
       d.address_line2 AS doctor_address_line2,
+      d.phone AS doctor_phone,
       s.name AS doctor_speciality
     FROM appointments a
     JOIN doctors d ON a.doctor_id = d.id

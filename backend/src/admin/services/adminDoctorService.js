@@ -63,6 +63,7 @@ export const addDoctor = async (doctorData, imageFile) => {
     fees,
     address_line1,
     address_line2,
+    phone,
   } = doctorData;
 
   const [existing] = await pool.query('SELECT * FROM doctors WHERE email = ?', [
@@ -78,8 +79,8 @@ export const addDoctor = async (doctorData, imageFile) => {
 
   const [result] = await pool.query(
     `INSERT INTO doctors
-    (name, email, password, image, speciality_id, degree, experience, about, fees, address_line1, address_line2, available, is_verified, verification_token, verification_token_expires)
-    VALUES (?, ?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, true, 0, ?, ?)`,
+    (name, email, password, image, speciality_id, degree, experience, about, fees, address_line1, address_line2, phone, available, is_verified, verification_token, verification_token_expires)
+    VALUES (?, ?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, true, 0, ?, ?)`,
     [
       name,
       email,
@@ -91,6 +92,7 @@ export const addDoctor = async (doctorData, imageFile) => {
       fees,
       address_line1,
       address_line2,
+      phone,
       verificationToken,
       tokenExpires,
     ],
@@ -173,6 +175,7 @@ export const updateDoctor = async (doctorId, doctorData, imageFile) => {
     fees,
     address_line1,
     address_line2,
+    phone,
   } = doctorData;
 
   let finalPassword = existingDoctor[0].password;
@@ -184,7 +187,7 @@ export const updateDoctor = async (doctorId, doctorData, imageFile) => {
   await pool.query(
     `UPDATE doctors
     SET name = ?, email = ?, password = ?, image = ?, speciality_id = ?, degree = ?,
-    experience = ?, about = ?, fees = ?, address_line1 = ?, address_line2 = ?
+    experience = ?, about = ?, fees = ?, address_line1 = ?, address_line2 = ?, phone = ?
     WHERE id = ?`,
     [
       name,
@@ -198,6 +201,7 @@ export const updateDoctor = async (doctorId, doctorData, imageFile) => {
       fees,
       address_line1,
       address_line2,
+      phone,
       doctorId,
     ],
   );
@@ -215,6 +219,7 @@ export const updateDoctor = async (doctorId, doctorData, imageFile) => {
       d.fees,
       d.address_line1,
       d.address_line2,
+      d.phone,
       d.available,
       d.is_verified
     FROM doctors d
@@ -239,6 +244,7 @@ export const updateDoctor = async (doctorId, doctorData, imageFile) => {
       line1: doc.address_line1,
       line2: doc.address_line2,
     },
+    phone: doc.phone,
     available: Boolean(doc.available),
     isVerified: Boolean(doc.is_verified),
   };
