@@ -1,5 +1,6 @@
 import * as appointmentModel from '../models/appointmentModel.js';
 import { APPOINTMENT_STATUS } from '../../constants/appointmentStatus.js';
+import { AppError } from '../../utils/AppError.js';
 
 const convertTo12Hour = (time24h) => {
   const [hours, minutes] = time24h.split(':');
@@ -63,11 +64,11 @@ const bookAppointment = async (
   const doctor = await appointmentModel.checkDoctorAvailability(doctorId);
 
   if (!doctor) {
-    throw new Error('Doctor not found');
+    throw new AppError('Doctor not found', 404);
   }
 
   if (!doctor.available) {
-    throw new Error('Doctor is not available for appointments');
+    throw new AppError('Doctor is not available for appointments', 400);
   }
 
   const today = new Date();
@@ -75,7 +76,7 @@ const bookAppointment = async (
   const selectedDate = new Date(appointmentDate);
 
   if (selectedDate < today) {
-    throw new Error('Cannot book appointments in the past');
+    throw new AppError('Cannot book appointments in the past', 400);
   }
 
   let timeIn24Hour = appointmentTime;
@@ -87,7 +88,7 @@ const bookAppointment = async (
   const hourNum = parseInt(hours);
 
   if (hourNum < 10 || hourNum >= 21) {
-    throw new Error('Appointment time must be between 10:00 AM and 9:00 PM');
+    throw new AppError('Appointment time must be between 10:00 AM and 9:00 PM', 400);
   }
 
   const bookedSlots = await appointmentModel.findAppointmentsByDoctorAndDate(
@@ -96,7 +97,7 @@ const bookAppointment = async (
   );
 
   if (bookedSlots.includes(timeIn24Hour)) {
-    throw new Error('This time slot is already booked');
+    throw new AppError('This time slot is already booked', 400);
   }
 
   const appointmentId = await appointmentModel.createAppointment(
@@ -120,11 +121,11 @@ const getAppointmentDetails = async (appointmentId, userId) => {
   const appointment = await appointmentModel.findAppointmentById(appointmentId);
 
   if (!appointment) {
-    throw new Error('Appointment not found');
+    throw new AppError('Appointment not found', 404);
   }
 
   if (appointment.user_id !== userId) {
-    throw new Error('Unauthorized to view this appointment');
+    throw new AppError('Unauthorized to view this appointment', 403);
   }
 
   return formatAppointmentResponse(appointment);
@@ -138,19 +139,19 @@ const cancelAppointment = async (
   const appointment = await appointmentModel.findAppointmentById(appointmentId);
 
   if (!appointment) {
-    throw new Error('Appointment not found');
+    throw new AppError('Appointment not found', 404);
   }
 
   if (appointment.user_id !== userId) {
-    throw new Error('Unauthorized to cancel this appointment');
+    throw new AppError('Unauthorized to cancel this appointment', 403);
   }
 
   if (appointment.status === APPOINTMENT_STATUS.CANCELLED) {
-    throw new Error('Appointment is already cancelled');
+    throw new AppError('Appointment is already cancelled', 400);
   }
 
   if (appointment.status === APPOINTMENT_STATUS.COMPLETED) {
-    throw new Error('Cannot cancel completed appointment');
+    throw new AppError('Cannot cancel completed appointment', 400);
   }
 
   const success = await appointmentModel.cancelAppointment(
@@ -169,11 +170,11 @@ const getAvailableSlots = async (doctorId, date) => {
   const doctor = await appointmentModel.checkDoctorAvailability(doctorId);
 
   if (!doctor) {
-    throw new Error('Doctor not found');
+    throw new AppError('Doctor not found', 404);
   }
 
   if (!doctor.available) {
-    throw new Error('Doctor is not available for appointments');
+    throw new AppError('Doctor is not available for appointments', 400);
   }
 
   const bookedSlots = await appointmentModel.findAppointmentsByDoctorAndDate(
@@ -237,11 +238,11 @@ const createCheckoutPreview = async (
   const fullDoctor = doctorRows[0];
 
   if (!fullDoctor) {
-    throw new Error('Doctor not found');
+    throw new AppError('Doctor not found', 404);
   }
 
   if (!fullDoctor.available) {
-    throw new Error('Doctor is not available');
+    throw new AppError('Doctor is not available', 400);
   }
 
   const userQuery = `
@@ -253,7 +254,7 @@ const createCheckoutPreview = async (
   const user = userRows[0];
 
   if (!user) {
-    throw new Error('User not found');
+    throw new AppError('User not found', 404);
   }
 
   let timeIn24Hour = appointmentTime;

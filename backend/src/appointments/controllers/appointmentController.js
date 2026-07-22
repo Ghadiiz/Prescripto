@@ -1,6 +1,6 @@
 import * as appointmentService from '../services/appointmentService.js';
 
-const bookAppointment = async (req, res) => {
+const bookAppointment = async (req, res, next) => {
   try {
     const { doctorId, slotDate, slotTime } = req.body;
     const userId = req.userId;
@@ -52,15 +52,11 @@ const bookAppointment = async (req, res) => {
       appointment,
     });
   } catch (error) {
-    console.error('Book appointment error:', error);
-    res.status(400).json({
-      success: false,
-      message: error.message,
-    });
+    next(error);
   }
 };
 
-const getMyAppointments = async (req, res) => {
+const getMyAppointments = async (req, res, next) => {
   try {
     const userId = req.userId;
 
@@ -71,15 +67,11 @@ const getMyAppointments = async (req, res) => {
       appointments,
     });
   } catch (error) {
-    console.error('Get appointments error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Failed to fetch appointments',
-    });
+    next(error);
   }
 };
 
-const getAppointmentById = async (req, res) => {
+const getAppointmentById = async (req, res, next) => {
   try {
     const appointmentId = req.params.id;
     const userId = req.userId;
@@ -94,30 +86,11 @@ const getAppointmentById = async (req, res) => {
       appointment,
     });
   } catch (error) {
-    console.error('Get appointment error:', error);
-
-    if (error.message === 'Appointment not found') {
-      return res.status(404).json({
-        success: false,
-        message: error.message,
-      });
-    }
-
-    if (error.message === 'Unauthorized to view this appointment') {
-      return res.status(403).json({
-        success: false,
-        message: error.message,
-      });
-    }
-
-    res.status(500).json({
-      success: false,
-      message: 'Failed to fetch appointment details',
-    });
+    next(error);
   }
 };
 
-const cancelAppointment = async (req, res) => {
+const cancelAppointment = async (req, res, next) => {
   try {
     const appointmentId = req.params.id;
     const userId = req.userId;
@@ -134,40 +107,11 @@ const cancelAppointment = async (req, res) => {
       message: result.message,
     });
   } catch (error) {
-    console.error('Cancel appointment error:', error);
-
-    if (error.message === 'Appointment not found') {
-      return res.status(404).json({
-        success: false,
-        message: error.message,
-      });
-    }
-
-    if (error.message === 'Unauthorized to cancel this appointment') {
-      return res.status(403).json({
-        success: false,
-        message: error.message,
-      });
-    }
-
-    if (
-      error.message === 'Appointment is already cancelled' ||
-      error.message === 'Cannot cancel completed appointment'
-    ) {
-      return res.status(400).json({
-        success: false,
-        message: error.message,
-      });
-    }
-
-    res.status(500).json({
-      success: false,
-      message: 'Failed to cancel appointment',
-    });
+    next(error);
   }
 };
 
-const getAvailableSlots = async (req, res) => {
+const getAvailableSlots = async (req, res, next) => {
   try {
     const { doctorId, date } = req.query;
 
@@ -188,15 +132,11 @@ const getAvailableSlots = async (req, res) => {
       availableSlots,
     });
   } catch (error) {
-    console.error('Get available slots error:', error);
-    res.status(400).json({
-      success: false,
-      message: error.message,
-    });
+    next(error);
   }
 };
 
-const getCheckoutPreview = async (req, res) => {
+const getCheckoutPreview = async (req, res, next) => {
   try {
     const userId = req.userId;
     const { doctorId, appointmentDate, appointmentTime } = req.body;
@@ -221,11 +161,7 @@ const getCheckoutPreview = async (req, res) => {
       data: preview,
     });
   } catch (error) {
-    console.error('Error getting checkout preview:', error);
-    res.status(500).json({
-      success: false,
-      message: error.message || 'Failed to get checkout preview',
-    });
+    next(error);
   }
 };
 
