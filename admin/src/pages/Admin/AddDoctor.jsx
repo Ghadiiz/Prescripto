@@ -16,6 +16,7 @@ const AddDoctor = () => {
   const [degree, setDegree] = useState('');
   const [address1, setAddress1] = useState('');
   const [address2, setAddress2] = useState('');
+  const [phone, setPhone] = useState('');
 
   const { backendUrl, aToken } = useContext(AdminContext);
 
@@ -40,6 +41,7 @@ const AddDoctor = () => {
       formData.append('degree', degree);
       formData.append('address_line1', address1);
       formData.append('address_line2', address2);
+      formData.append('phone', phone);
 
       const { data } = await axios.post(
         backendUrl + '/api/admin/doctors',
@@ -59,6 +61,7 @@ const AddDoctor = () => {
         setEmail('');
         setAddress1('');
         setAddress2('');
+        setPhone('');
         setDegree('');
         setAbout('');
         setFees('');
@@ -205,6 +208,17 @@ const AddDoctor = () => {
                 type="text"
                 placeholder="Address 2"
                 required
+              />
+            </div>
+
+            <div className="flex-1 flex flex-col gap-1">
+              <p>Phone</p>
+              <input
+                onChange={(e) => setPhone(e.target.value)}
+                value={phone}
+                className="border rounded px-3 py-2"
+                type="text"
+                placeholder="Phone"
               />
             </div>
           </div>

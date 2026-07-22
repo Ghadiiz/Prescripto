@@ -19,6 +19,7 @@ const EditDoctor = () => {
   const [degree, setDegree] = useState('');
   const [address1, setAddress1] = useState('');
   const [address2, setAddress2] = useState('');
+  const [phone, setPhone] = useState('');
   const [currentImage, setCurrentImage] = useState('');
   const [loading, setLoading] = useState(true);
 
@@ -41,6 +42,7 @@ const EditDoctor = () => {
         setAbout(doctor.about || '');
         setSpeciality(doctor.speciality_id?.toString() || '7');
         setDegree(doctor.degree || '');
+        setPhone(doctor.phone || '');
         setCurrentImage(doctor.image || '');
 
         if (doctor.address) {
@@ -156,6 +158,7 @@ const EditDoctor = () => {
 
       formData.append('address_line1', address1);
       formData.append('address_line2', address2);
+      formData.append('phone', phone);
 
       const { data } = await axios.put(
         backendUrl + `/api/admin/doctors/${id}`,
@@ -320,6 +323,17 @@ const EditDoctor = () => {
                 type="text"
                 placeholder="Address 2"
                 required
+              />
+            </div>
+
+            <div className="flex-1 flex flex-col gap-1">
+              <p>Phone</p>
+              <input
+                onChange={(e) => setPhone(e.target.value)}
+                value={phone}
+                className="border rounded px-3 py-2"
+                type="text"
+                placeholder="Phone"
               />
             </div>
           </div>

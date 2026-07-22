@@ -19,6 +19,7 @@ export const getAllDoctors = async () => {
       d.fees,
       d.address_line1,
       d.address_line2,
+      d.phone,
       d.available,
       d.is_verified
     FROM doctors d
@@ -40,6 +41,7 @@ export const getAllDoctors = async () => {
       line1: doc.address_line1,
       line2: doc.address_line2,
     },
+    phone: doc.phone,
     available: Boolean(doc.available),
     isVerified: Boolean(doc.is_verified),
   }));
