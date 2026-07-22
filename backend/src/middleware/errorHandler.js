@@ -8,7 +8,11 @@ export const errorHandler = (err, req, res, next) => {
   console.error('Error:', err);
 
   if (err instanceof AppError || err.isOperational) {
-    return res.status(err.statusCode || 400).json({ success: false, message: err.message });
+    return res.status(err.statusCode || 400).json({
+      success: false,
+      message: err.message,
+      ...(err.extra && typeof err.extra === 'object' ? err.extra : {}),
+    });
   }
 
   res.status(500).json({ success: false, message: 'Something went wrong. Please try again later.' });

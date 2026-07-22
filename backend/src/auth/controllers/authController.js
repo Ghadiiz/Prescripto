@@ -5,7 +5,7 @@ import {
   isValidName,
 } from '../../utils/validators.js';
 
-export const registerUser = async (req, res) => {
+export const registerUser = async (req, res, next) => {
   try {
     const {
       name,
@@ -78,15 +78,11 @@ export const registerUser = async (req, res) => {
       needsVerification: true,
     });
   } catch (error) {
-    console.error('Register error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Registration failed',
-    });
+    next(error);
   }
 };
 
-export const loginUser = async (req, res) => {
+export const loginUser = async (req, res, next) => {
   try {
     const { email, password } = req.body;
 
@@ -106,31 +102,11 @@ export const loginUser = async (req, res) => {
       user: result.user,
     });
   } catch (error) {
-    if (error.message === 'INVALID_CREDENTIALS') {
-      return res.status(401).json({
-        success: false,
-        message: 'Invalid email or password',
-      });
-    }
-
-    if (error.message === 'EMAIL_NOT_VERIFIED') {
-      return res.status(403).json({
-        success: false,
-        message:
-          'Please verify your email before logging in. Check your inbox for the verification link.',
-        needsVerification: true,
-      });
-    }
-
-    console.error('Login error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Login failed',
-    });
+    next(error);
   }
 };
 
-export const getUserProfile = async (req, res) => {
+export const getUserProfile = async (req, res, next) => {
   try {
     const user = await authService.getUserProfileService(req.userId);
 
@@ -139,22 +115,11 @@ export const getUserProfile = async (req, res) => {
       user,
     });
   } catch (error) {
-    if (error.message === 'USER_NOT_FOUND') {
-      return res.status(404).json({
-        success: false,
-        message: 'User not found',
-      });
-    }
-
-    console.error('Get profile error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Failed to fetch profile',
-    });
+    next(error);
   }
 };
 
-export const updateUserProfile = async (req, res) => {
+export const updateUserProfile = async (req, res, next) => {
   try {
     const user = await authService.updateUserProfileService(
       req.userId,
@@ -166,22 +131,11 @@ export const updateUserProfile = async (req, res) => {
       user,
     });
   } catch (error) {
-    if (error.message === 'NO_UPDATES') {
-      return res.status(400).json({
-        success: false,
-        message: 'No fields to update',
-      });
-    }
-
-    console.error('Update profile error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Failed to update profile',
-    });
+    next(error);
   }
 };
 
-export const uploadProfileImage = async (req, res) => {
+export const uploadProfileImage = async (req, res, next) => {
   try {
     if (!req.file) {
       return res.status(400).json({
@@ -201,21 +155,11 @@ export const uploadProfileImage = async (req, res) => {
       user,
     });
   } catch (error) {
-    if (error.message === 'NO_IMAGE_FILE') {
-      return res.status(400).json({
-        success: false,
-        message: 'No image file provided',
-      });
-    }
-
-    res.status(500).json({
-      success: false,
-      message: 'Failed to upload image',
-    });
+    next(error);
   }
 };
 
-export const verifyEmail = async (req, res) => {
+export const verifyEmail = async (req, res, next) => {
   try {
     const { token } = req.body;
 
@@ -233,22 +177,11 @@ export const verifyEmail = async (req, res) => {
       message: 'Email verified successfully! You can now login.',
     });
   } catch (error) {
-    if (error.message === 'INVALID_OR_EXPIRED_TOKEN') {
-      return res.status(400).json({
-        success: false,
-        message: 'Invalid or expired verification token',
-      });
-    }
-
-    console.error('Verify email error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Email verification failed',
-    });
+    next(error);
   }
 };
 
-export const resendVerificationEmail = async (req, res) => {
+export const resendVerificationEmail = async (req, res, next) => {
   try {
     const { email } = req.body;
 
@@ -266,29 +199,11 @@ export const resendVerificationEmail = async (req, res) => {
       message: 'Verification email sent! Please check your inbox.',
     });
   } catch (error) {
-    if (error.message === 'USER_NOT_FOUND') {
-      return res.status(404).json({
-        success: false,
-        message: 'User not found',
-      });
-    }
-
-    if (error.message === 'ALREADY_VERIFIED') {
-      return res.status(400).json({
-        success: false,
-        message: 'Email already verified',
-      });
-    }
-
-    console.error('Resend verification error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Failed to send verification email',
-    });
+    next(error);
   }
 };
 
-export const forgotPassword = async (req, res) => {
+export const forgotPassword = async (req, res, next) => {
   try {
     const { email } = req.body;
 
@@ -303,15 +218,11 @@ export const forgotPassword = async (req, res) => {
 
     res.status(200).json(result);
   } catch (error) {
-    console.error('Forgot password error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Failed to process password reset request',
-    });
+    next(error);
   }
 };
 
-export const resetPassword = async (req, res) => {
+export const resetPassword = async (req, res, next) => {
   try {
     const { token, password } = req.body;
 
@@ -337,17 +248,6 @@ export const resetPassword = async (req, res) => {
         'Password reset successful! You can now login with your new password.',
     });
   } catch (error) {
-    if (error.message === 'INVALID_OR_EXPIRED_TOKEN') {
-      return res.status(400).json({
-        success: false,
-        message: 'Invalid or expired reset token',
-      });
-    }
-
-    console.error('Reset password error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Password reset failed',
-    });
+    next(error);
   }
 };

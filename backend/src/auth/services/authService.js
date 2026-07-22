@@ -9,6 +9,7 @@ import {
   sendVerificationEmail,
   sendPasswordResetEmail,
 } from '../../utils/emailService.js';
+import { AppError } from '../../utils/AppError.js';
 
 export const registerUserService = async (userData) => {
   const db = getDB();
@@ -80,7 +81,7 @@ export const loginUserService = async (email, password) => {
     ]);
 
     if (users.length === 0) {
-      throw new Error('INVALID_CREDENTIALS');
+      throw new AppError('Invalid email or password', 401);
     }
 
     const user = users[0];
@@ -88,11 +89,15 @@ export const loginUserService = async (email, password) => {
     const isPasswordValid = await bcrypt.compare(password, user.password);
 
     if (!isPasswordValid) {
-      throw new Error('INVALID_CREDENTIALS');
+      throw new AppError('Invalid email or password', 401);
     }
 
     if (!user.is_verified) {
-      throw new Error('EMAIL_NOT_VERIFIED');
+      throw new AppError(
+        'Please verify your email before logging in. Check your inbox for the verification link.',
+        403,
+        { needsVerification: true },
+      );
     }
 
     const token = jwt.sign(
@@ -126,7 +131,7 @@ export const getUserProfileService = async (userId) => {
   const user = await userModel.findUserById(userId);
 
   if (!user) {
-    throw new Error('USER_NOT_FOUND');
+    throw new AppError('User not found', 404);
   }
 
   return {
@@ -176,7 +181,7 @@ export const updateUserProfileService = async (userId, data) => {
   }
 
   if (updates.length === 0) {
-    throw new Error('NO_UPDATES');
+    throw new AppError('No fields to update', 400);
   }
 
   const user = await userModel.updateUser(userId, updates, values);
@@ -198,7 +203,7 @@ export const updateUserProfileService = async (userId, data) => {
 
 export const uploadUserProfileImageService = async (userId, file) => {
   if (!file) {
-    throw new Error('NO_IMAGE_FILE');
+    throw new AppError('No image file provided', 400);
   }
 
   const imageUpload = await cloudinary.uploader.upload(file.path, {
@@ -241,7 +246,7 @@ export const verifyEmailService = async (token) => {
     );
 
     if (users.length === 0) {
-      throw new Error('INVALID_OR_EXPIRED_TOKEN');
+      throw new AppError('Invalid or expired verification token', 400);
     }
 
     const user = users[0];
@@ -268,13 +273,13 @@ export const resendVerificationEmailService = async (email) => {
     ]);
 
     if (users.length === 0) {
-      throw new Error('USER_NOT_FOUND');
+      throw new AppError('User not found', 404);
     }
 
     const user = users[0];
 
     if (user.is_verified) {
-      throw new Error('ALREADY_VERIFIED');
+      throw new AppError('Email already verified', 400);
     }
 
     const verificationToken = crypto.randomBytes(32).toString('hex');
@@ -340,7 +345,7 @@ export const resetPasswordService = async (token, newPassword) => {
     );
 
     if (users.length === 0) {
-      throw new Error('INVALID_OR_EXPIRED_TOKEN');
+      throw new AppError('Invalid or expired verification token', 400);
     }
 
     const user = users[0];
