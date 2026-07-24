@@ -50,7 +50,7 @@ export const completeAppointment = async (appointmentId, doctorId) => {
   const db = getDB();
 
   const [appointments] = await db.query(
-    'SELECT * FROM appointments WHERE id = ? AND doctor_id = ?',
+    'SELECT *, TIMESTAMP(appointment_date, appointment_time) <= NOW() AS is_past FROM appointments WHERE id = ? AND doctor_id = ?',
     [appointmentId, doctorId],
   );
 
@@ -66,6 +66,10 @@ export const completeAppointment = async (appointmentId, doctorId) => {
 
   if (appointment.status === APPOINTMENT_STATUS.COMPLETED) {
     throw new AppError('Appointment already completed', 400);
+  }
+
+  if (!appointment.is_past) {
+    throw new AppError('Cannot complete an appointment before its scheduled time', 400);
   }
 
   await db.query('UPDATE appointments SET status = ? WHERE id = ?', [

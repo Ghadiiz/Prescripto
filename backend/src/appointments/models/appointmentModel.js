@@ -36,6 +36,7 @@ const findAppointmentById = async (appointmentId) => {
       a.amount,
       a.cancellation_reason,
       a.created_at,
+      TIMESTAMP(a.appointment_date, a.appointment_time) <= NOW() AS is_past,
       d.id AS doctor__id,
       d.name AS doctor_name,
       d.image AS doctor_image,

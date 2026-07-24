@@ -156,6 +156,10 @@ const cancelAppointment = async (
     throw new AppError('Cannot cancel completed appointment', 400);
   }
 
+  if (appointment.is_past) {
+    throw new AppError('Cannot cancel an appointment that has already passed', 400);
+  }
+
   const success = await appointmentModel.cancelAppointment(
     appointmentId,
     cancellationReason,
