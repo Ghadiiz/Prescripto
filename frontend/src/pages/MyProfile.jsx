@@ -1,4 +1,4 @@
-import React, { useContext, useState } from 'react';
+import React, { useContext, useState, useEffect } from 'react';
 import { AppContext } from '../context/AppContext';
 import axios from 'axios';
 import { toast } from 'react-toastify';
@@ -41,6 +41,10 @@ const MyProfile = () => {
   const [phoneData, setPhoneData] = useState(() =>
     parsePhoneNumber(userData?.phone),
   );
+
+  useEffect(() => {
+    setPhoneData(parsePhoneNumber(userData?.phone));
+  }, [userData?.phone]);
 
   const formatDateForInput = (dateString) => {
     if (!dateString) return '';
@@ -123,7 +127,8 @@ const MyProfile = () => {
         phone: phoneData.phoneNumber
           ? phoneData.countryCode + phoneData.phoneNumber
           : null,
-        address: userData.address,
+        address_line1: userData.address?.line1 || '',
+        address_line2: userData.address?.line2 || '',
         gender: userData.gender,
         dob: formattedDob,
       };
@@ -200,24 +205,26 @@ const MyProfile = () => {
           alt="Profile"
         />
 
-        <label
-          htmlFor="profileImageInput"
-          className="absolute bottom-2 right-2 bg-primary text-white rounded-full p-2.5 shadow-lg hover:scale-110 cursor-pointer transition-all"
-          title="Change profile picture"
-        >
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            className="h-5 w-5"
-            viewBox="0 0 20 20"
-            fill="currentColor"
+        {isEdit && (
+          <label
+            htmlFor="profileImageInput"
+            className="absolute bottom-2 right-2 bg-primary text-white rounded-full p-2.5 shadow-lg hover:scale-110 cursor-pointer transition-all"
+            title="Change profile picture"
           >
-            <path
-              fillRule="evenodd"
-              d="M4 5a2 2 0 00-2 2v8a2 2 0 002 2h12a2 2 0 002-2V7a2 2 0 00-2-2h-1.586a1 1 0 01-.707-.293l-1.121-1.121A2 2 0 0011.172 3H8.828a2 2 0 00-1.414.586L6.293 4.707A1 1 0 015.586 5H4zm6 9a3 3 0 100-6 3 3 0 000 6z"
-              clipRule="evenodd"
-            />
-          </svg>
-        </label>
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              className="h-5 w-5"
+              viewBox="0 0 20 20"
+              fill="currentColor"
+            >
+              <path
+                fillRule="evenodd"
+                d="M4 5a2 2 0 00-2 2v8a2 2 0 002 2h12a2 2 0 002-2V7a2 2 0 00-2-2h-1.586a1 1 0 01-.707-.293l-1.121-1.121A2 2 0 0011.172 3H8.828a2 2 0 00-1.414.586L6.293 4.707A1 1 0 015.586 5H4zm6 9a3 3 0 100-6 3 3 0 000 6z"
+                clipRule="evenodd"
+              />
+            </svg>
+          </label>
+        )}
 
         <input
           onChange={(e) => setImage(e.target.files[0])}

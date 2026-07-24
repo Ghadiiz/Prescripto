@@ -11,7 +11,7 @@ export const findUserByEmail = async (email) => {
 export const findUserById = async (id) => {
   const db = getDB();
   const [users] = await db.query(
-    'SELECT id, name, email, phone, address_line1, address_line2, gender, dob, image FROM users WHERE id = ?',
+    "SELECT id, name, email, phone, address_line1, address_line2, gender, DATE_FORMAT(dob, '%Y-%m-%d') AS dob, image FROM users WHERE id = ?",
     [id],
   );
   return users[0];
