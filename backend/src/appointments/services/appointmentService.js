@@ -87,14 +87,6 @@ const bookAppointment = async (
     );
   }
 
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const selectedDate = new Date(appointmentDate);
-
-  if (selectedDate < today) {
-    throw new AppError('Cannot book appointments in the past', 400);
-  }
-
   let timeIn24Hour = appointmentTime;
   if (appointmentTime.includes('AM') || appointmentTime.includes('PM')) {
     timeIn24Hour = convertTo24Hour(appointmentTime);
@@ -105,6 +97,14 @@ const bookAppointment = async (
 
   if (hourNum < 10 || hourNum >= 21) {
     throw new AppError('Appointment time must be between 10:00 AM and 9:00 PM', 400);
+  }
+
+  const [pastCheck] = await db.query(
+    'SELECT TIMESTAMP(?, ?) <= NOW() AS is_past',
+    [appointmentDate, timeIn24Hour],
+  );
+  if (pastCheck[0].is_past) {
+    throw new AppError('Cannot book appointments in the past', 400);
   }
 
   const bookedSlots = await appointmentModel.findAppointmentsByDoctorAndDate(
