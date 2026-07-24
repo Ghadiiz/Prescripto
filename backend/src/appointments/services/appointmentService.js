@@ -1,6 +1,7 @@
 import * as appointmentModel from '../models/appointmentModel.js';
 import { APPOINTMENT_STATUS } from '../../constants/appointmentStatus.js';
 import { AppError } from '../../utils/AppError.js';
+import { getDB } from '../../config/mysql.js';
 
 const convertTo12Hour = (time24h) => {
   const [hours, minutes] = time24h.split(':');
@@ -71,6 +72,18 @@ const bookAppointment = async (
 
   if (!doctor.available) {
     throw new AppError('Doctor is not available for appointments', 400);
+  }
+
+  const db = getDB();
+  const [userRows] = await db.query(
+    'SELECT dob FROM users WHERE id = ?',
+    [userId],
+  );
+  if (!userRows[0] || !userRows[0].dob) {
+    throw new AppError(
+      'Please add your date of birth in My Profile before booking an appointment',
+      400,
+    );
   }
 
   const today = new Date();
