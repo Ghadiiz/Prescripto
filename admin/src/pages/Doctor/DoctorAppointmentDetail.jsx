@@ -1,6 +1,7 @@
 import React, { useContext, useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { DoctorContext } from '../../context/DoctorContext';
+import { AppContext } from '../../context/AppContext';
 import axios from 'axios';
 import { toast } from 'react-toastify';
 import { assets } from '../../assets/assets';
@@ -9,6 +10,7 @@ const DoctorAppointmentDetail = () => {
   const { id } = useParams();
   const { backendUrl, dToken, cancelAppointment, completeAppointment } =
     useContext(DoctorContext);
+  const { calculateAge } = useContext(AppContext);
   const navigate = useNavigate();
 
   const [appointment, setAppointment] = useState(null);
@@ -148,7 +150,7 @@ const DoctorAppointmentDetail = () => {
           </div>
         </div>
         <p className="text-gray-500 text-sm">
-          Appointment ID: #{appointment._id}
+          Appointment ID: #{appointment.id}
         </p>
       </div>
 
@@ -188,7 +190,9 @@ const DoctorAppointmentDetail = () => {
               <div>
                 <p className="text-gray-500">Age</p>
                 <p className="text-gray-800 font-medium">
-                  {appointment.patientAge || 'N/A'}
+                  {appointment.patientDob
+                    ? calculateAge(appointment.patientDob)
+                    : 'N/A'}
                 </p>
               </div>
             </div>

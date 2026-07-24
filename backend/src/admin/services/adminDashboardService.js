@@ -72,6 +72,7 @@ export const getAllAppointments = async () => {
       u.name as patientName,
       u.email as patientEmail,
       u.phone as patientPhone,
+      DATE_FORMAT(u.dob, '%Y-%m-%d') as patientDob,
       d.id as doctorId,
       d.name as doctorName,
       s.name as doctorSpeciality,
@@ -93,6 +94,7 @@ export const getAllAppointments = async () => {
       name: apt.patientName,
       email: apt.patientEmail,
       phone: apt.patientPhone,
+      dob: apt.patientDob,
     },
     doctor: {
       id: apt.doctorId,

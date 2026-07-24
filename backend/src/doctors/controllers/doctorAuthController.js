@@ -147,7 +147,7 @@ export const getAppointmentDetails = async (req, res, next) => {
         u.address_line1 as patientAddressLine1,
         u.address_line2 as patientAddressLine2,
         u.gender as patientGender,
-        u.dob as patientDob,
+        DATE_FORMAT(u.dob, '%Y-%m-%d') as patientDob,
         d.name as doctorName,
         s.name as speciality,
         d.degree,
