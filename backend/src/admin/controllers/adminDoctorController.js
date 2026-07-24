@@ -1,4 +1,5 @@
 import * as adminDoctorService from '../services/adminDoctorService.js';
+import { isValidEmail, isValidName, isValidPhone, isPositiveNumber } from '../../utils/validators.js';
 
 export const getAllDoctors = async (req, res, next) => {
   try {
@@ -28,6 +29,34 @@ export const addDoctor = async (req, res, next) => {
       });
     }
 
+    if (!isValidName(name)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Doctor name must be between 2 and 100 characters',
+      });
+    }
+
+    if (!isValidEmail(email)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Please provide a valid email address',
+      });
+    }
+
+    if (!isPositiveNumber(fees)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Fees must be a positive number',
+      });
+    }
+
+    if (!isValidPhone(doctorData.phone)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Please provide a valid phone number',
+      });
+    }
+
     const doctor = await adminDoctorService.addDoctor(doctorData, imageFile);
 
     res.status(201).json({
@@ -46,6 +75,35 @@ export const updateDoctor = async (req, res, next) => {
     const { id } = req.params;
     const doctorData = req.body;
     const imageFile = req.file;
+    const { name, email, fees } = doctorData;
+
+    if (name !== undefined && !isValidName(name)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Doctor name must be between 2 and 100 characters',
+      });
+    }
+
+    if (email !== undefined && !isValidEmail(email)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Please provide a valid email address',
+      });
+    }
+
+    if (fees !== undefined && !isPositiveNumber(fees)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Fees must be a positive number',
+      });
+    }
+
+    if (!isValidPhone(doctorData.phone)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Please provide a valid phone number',
+      });
+    }
 
     const doctor = await adminDoctorService.updateDoctor(
       id,
