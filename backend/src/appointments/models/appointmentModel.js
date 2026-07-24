@@ -1,4 +1,5 @@
 import { getDB } from '../../config/mysql.js';
+import { AppError } from '../../utils/AppError.js';
 
 const createAppointment = async (
   userId,
@@ -13,14 +14,21 @@ const createAppointment = async (
     VALUES (?, ?, ?, ?, 'pending', ?)
   `;
 
-  const [result] = await pool.query(query, [
-    userId,
-    doctorId,
-    appointmentDate,
-    appointmentTime,
-    amount,
-  ]);
-  return result.insertId;
+  try {
+    const [result] = await pool.query(query, [
+      userId,
+      doctorId,
+      appointmentDate,
+      appointmentTime,
+      amount,
+    ]);
+    return result.insertId;
+  } catch (error) {
+    if (error.code === 'ER_DUP_ENTRY') {
+      throw new AppError('This time slot is already booked', 409);
+    }
+    throw error;
+  }
 };
 
 const findAppointmentById = async (appointmentId) => {
@@ -96,7 +104,7 @@ const findAppointmentsByDoctorAndDate = async (doctorId, appointmentDate) => {
     FROM appointments
     WHERE doctor_id = ? 
     AND appointment_date = ?
-    AND status IN ('pending', 'confirmed')
+    AND status != 'cancelled'
   `;
 
   const [rows] = await pool.query(query, [doctorId, appointmentDate]);

@@ -82,8 +82,10 @@ CREATE TABLE appointments (
   cancellation_reason VARCHAR(500),
   created_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  active_slot VARCHAR(64) GENERATED ALWAYS AS (CASE WHEN status = 'cancelled' THEN NULL ELSE CONCAT(doctor_id, '_', appointment_date, '_', appointment_time) END) VIRTUAL,
   KEY user_id (user_id),
-  UNIQUE KEY unique_slot (doctor_id, appointment_date, appointment_time),
+  KEY idx_doctor_id (doctor_id),
+  UNIQUE KEY unique_active_slot (active_slot),
   CONSTRAINT fk_appointments_user FOREIGN KEY (user_id)
     REFERENCES users (id) ON DELETE CASCADE,
   CONSTRAINT fk_appointments_doctor FOREIGN KEY (doctor_id)
