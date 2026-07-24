@@ -5,3 +5,6 @@ dist/
 .vscode/
 *.log
 .DS_Store
+
+uploads/*
+!uploads/.gitkeep
