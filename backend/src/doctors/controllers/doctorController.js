@@ -8,7 +8,6 @@ export const getAllDoctors = async (req, res, next) => {
     const transformedDoctors = doctors.map((doc) => ({
       _id: doc.id.toString(),
       name: doc.name,
-      email: doc.email,
       image: doc.image,
       speciality: doc.speciality,
       degree: doc.degree,
@@ -47,7 +46,6 @@ export const getDoctorById = async (req, res, next) => {
     const transformedDoctor = {
       _id: doc.id.toString(),
       name: doc.name,
-      email: doc.email,
       image: doc.image,
       speciality: doc.speciality,
       degree: doc.degree,
@@ -105,7 +103,6 @@ export const searchDoctors = async (req, res, next) => {
     const transformedDoctors = doctors.map((doc) => ({
       _id: doc.id.toString(),
       name: doc.name,
-      email: doc.email,
       image: doc.image,
       speciality: doc.speciality,
       degree: doc.degree,
