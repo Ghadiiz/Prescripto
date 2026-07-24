@@ -120,13 +120,15 @@ const DoctorDashboard = () => {
                         alt=""
                         title="Cancel"
                       />
-                      <img
-                        onClick={() => completeAppointment(item._id)}
-                        className="w-10 cursor-pointer hover:scale-110 transition-all"
-                        src={assets.tick_icon}
-                        alt=""
-                        title="Complete"
-                      />
+                      {item.isPast && (
+                        <img
+                          onClick={() => completeAppointment(item._id)}
+                          className="w-10 cursor-pointer hover:scale-110 transition-all"
+                          src={assets.tick_icon}
+                          alt=""
+                          title="Complete"
+                        />
+                      )}
                     </div>
                   ) : (
                     <p className="text-gray-400 text-xs">Pending</p>

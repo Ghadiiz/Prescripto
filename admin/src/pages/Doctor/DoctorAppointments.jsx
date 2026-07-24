@@ -109,13 +109,15 @@ const DoctorAppointments = () => {
                       alt="Cancel"
                       title="Cancel Appointment"
                     />
-                    <img
-                      onClick={() => completeAppointment(item._id)}
-                      className="w-10 cursor-pointer hover:scale-110 transition-all"
-                      src={assets.tick_icon}
-                      alt="Complete"
-                      title="Mark as Completed"
-                    />
+                    {item.isPast && (
+                      <img
+                        onClick={() => completeAppointment(item._id)}
+                        className="w-10 cursor-pointer hover:scale-110 transition-all"
+                        src={assets.tick_icon}
+                        alt="Complete"
+                        title="Mark as Completed"
+                      />
+                    )}
                   </>
                 ) : (
                   <p className="text-gray-400 text-xs font-medium">

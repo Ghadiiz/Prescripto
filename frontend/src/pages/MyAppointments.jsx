@@ -232,6 +232,10 @@ const MyAppointments = () => {
                   <button className="sm:min-w-48 py-2 px-4 border border-green-500 text-green-500 bg-green-50 rounded cursor-not-allowed">
                     Completed
                   </button>
+                ) : item.isPast ? (
+                  <p className="sm:min-w-48 py-2 px-4 text-center text-xs text-gray-400 border border-gray-200 rounded">
+                    Cannot be cancelled
+                  </p>
                 ) : (
                   <button
                     onClick={() => openCancelModal(item._id)}

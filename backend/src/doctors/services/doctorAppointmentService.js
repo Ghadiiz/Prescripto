@@ -6,8 +6,9 @@ export const getDoctorAppointments = async (doctorId, status = null) => {
   const db = getDB();
 
   let query = `
-    SELECT a.*, 
-           u.name as patient_name, 
+    SELECT a.*,
+           TIMESTAMP(a.appointment_date, a.appointment_time) <= NOW() AS is_past,
+           u.name as patient_name,
            u.email as patient_email,
            u.image as patient_image,
            d.name as doctor_name,
@@ -41,6 +42,7 @@ export const getDoctorAppointments = async (doctorId, status = null) => {
     appointmentTime: apt.appointment_time,
     amount: apt.appointment_fee,
     status: apt.status,
+    isPast: Boolean(apt.is_past),
     cancellationReason: apt.cancellation_reason,
     createdAt: apt.created_at,
   }));
