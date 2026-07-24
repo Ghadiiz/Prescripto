@@ -9,6 +9,7 @@ import appointmentRoutes from './src/appointments/routes/appointmentRoutes.js';
 import adminRoutes from './src/admin/routes/adminRoutes.js';
 import doctorPanelsRoutes from './src/doctors/routes/doctorPanelRoutes.js';
 import { notFound, errorHandler } from './src/middleware/errorHandler.js';
+import { AppError } from './src/utils/AppError.js';
 
 dotenv.config();
 
@@ -23,7 +24,27 @@ if (missingEnvVars.length > 0) {
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-app.use(cors());
+if (process.env.NODE_ENV === 'production') {
+  app.set('trust proxy', 1);
+}
+
+const allowedOrigins = (
+  process.env.ALLOWED_ORIGINS || 'http://localhost:5173,http://localhost:5174'
+)
+  .split(',')
+  .map((origin) => origin.trim())
+  .filter(Boolean);
+
+app.use(
+  cors({
+    origin: (origin, callback) => {
+      if (!origin || allowedOrigins.includes(origin)) {
+        return callback(null, true);
+      }
+      return callback(new AppError('Not allowed by CORS', 403));
+    },
+  }),
+);
 app.use(express.json());
 
 connectDB();
