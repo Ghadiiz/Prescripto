@@ -26,7 +26,9 @@ const Login = () => {
         });
         if (data.success) {
           setAToken(data.data.token);
-          localStorage.setItem('aToken', data.data.token);
+          sessionStorage.setItem('aToken', data.data.token);
+          sessionStorage.removeItem('dToken');
+          setDToken('');
           toast.success('Admin logged in successfully');
         } else {
           toast.error(data.message);
@@ -38,7 +40,9 @@ const Login = () => {
         });
         if (data.success) {
           setDToken(data.token);
-          localStorage.setItem('dToken', data.token);
+          sessionStorage.setItem('dToken', data.token);
+          sessionStorage.removeItem('aToken');
+          setAToken('');
           toast.success('Doctor logged in successfully');
         } else {
           toast.error(data.message);

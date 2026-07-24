@@ -12,10 +12,14 @@ const Navbar = () => {
 
   const logout = () => {
     navigate('/');
-    dToken && setDToken('');
-    dToken && localStorage.removeItem('dToken');
-    aToken && setAToken('');
-    aToken && localStorage.removeItem('aToken');
+    if (dToken) {
+      setDToken('');
+      sessionStorage.removeItem('dToken');
+    }
+    if (aToken) {
+      setAToken('');
+      sessionStorage.removeItem('aToken');
+    }
   };
 
   return (
@@ -28,7 +32,7 @@ const Navbar = () => {
           alt=""
         />
         <p className="border px-2.5 py-0.5 rounded-full border-gray-500 text-gray-600">
-          {aToken ? 'Admin' : 'Doctor'}
+          {aToken ? 'Admin' : dToken ? 'Doctor' : ''}
         </p>
       </div>
       <button

@@ -1,5 +1,5 @@
 import React, { useContext } from 'react';
-import { Route, Routes } from 'react-router-dom';
+import { Route, Routes, Navigate } from 'react-router-dom';
 import { ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 
@@ -35,25 +35,31 @@ function App() {
       <Navbar />
       <div className="flex items-start">
         <Sidebar />
-        <Routes>
-          <Route path="/" element={<></>} />
-
-          <Route path="/admin/dashboard" element={<Dashboard />} />
-          <Route path="/admin/appointments" element={<AllAppointments />} />
-          <Route path="/admin/add-doctor" element={<AddDoctor />} />
-          <Route path="/admin/add-admin" element={<AddAdmin />} />
-          <Route path="/admin/profile" element={<AdminProfile />} />
-          <Route path="/admin/edit-doctor/:id" element={<EditDoctor />} />
-          <Route path="/admin/doctors-list" element={<DoctorsList />} />
-
-          <Route path="/doctor/dashboard" element={<DoctorDashboard />} />
-          <Route path="/doctor/appointments" element={<DoctorAppointments />} />
-          <Route
-            path="/doctor-appointment-details/:id"
-            element={<DoctorAppointmentDetail />}
-          />
-          <Route path="/doctor/profile" element={<DoctorProfile />} />
-        </Routes>
+        {aToken ? (
+          <Routes>
+            <Route path="/" element={<></>} />
+            <Route path="/admin/dashboard" element={<Dashboard />} />
+            <Route path="/admin/appointments" element={<AllAppointments />} />
+            <Route path="/admin/add-doctor" element={<AddDoctor />} />
+            <Route path="/admin/add-admin" element={<AddAdmin />} />
+            <Route path="/admin/profile" element={<AdminProfile />} />
+            <Route path="/admin/edit-doctor/:id" element={<EditDoctor />} />
+            <Route path="/admin/doctors-list" element={<DoctorsList />} />
+            <Route path="*" element={<Navigate to="/admin/dashboard" replace />} />
+          </Routes>
+        ) : (
+          <Routes>
+            <Route path="/" element={<></>} />
+            <Route path="/doctor/dashboard" element={<DoctorDashboard />} />
+            <Route path="/doctor/appointments" element={<DoctorAppointments />} />
+            <Route
+              path="/doctor-appointment-details/:id"
+              element={<DoctorAppointmentDetail />}
+            />
+            <Route path="/doctor/profile" element={<DoctorProfile />} />
+            <Route path="*" element={<Navigate to="/doctor/dashboard" replace />} />
+          </Routes>
+        )}
       </div>
     </div>
   ) : (
