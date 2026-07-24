@@ -1,5 +1,6 @@
 import { v2 as cloudinary } from 'cloudinary';
 import dotenv from 'dotenv';
+import fs from 'fs';
 
 dotenv.config();
 
@@ -20,6 +21,12 @@ const uploadToCloudinary = async (filePath) => {
   } catch (error) {
     console.error('Cloudinary upload error:', error);
     throw new Error('Failed to upload image to Cloudinary');
+  } finally {
+    try {
+      fs.unlinkSync(filePath);
+    } catch (cleanupError) {
+      console.error('Temp file cleanup failed:', cleanupError.message);
+    }
   }
 };
 
