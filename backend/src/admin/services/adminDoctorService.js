@@ -265,7 +265,7 @@ export const deleteDoctor = async (doctorId) => {
   }
 
   const [appointments] = await pool.query(
-    'SELECT COUNT(*) as count FROM appointments WHERE doctor_id = ?',
+    "SELECT COUNT(*) as count FROM appointments WHERE doctor_id = ? AND status != 'cancelled'",
     [doctorId],
   );
 

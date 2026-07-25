@@ -40,7 +40,9 @@ const AppContextProvider = (props) => {
       }
     } catch (error) {
       console.log(error);
-      toast.error(error.message);
+      localStorage.removeItem('token');
+      setToken(false);
+      setUserData(false);
     }
   };
 
