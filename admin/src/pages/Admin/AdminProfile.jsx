@@ -1,10 +1,12 @@
 import React, { useContext, useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { AdminContext } from '../../context/AdminContext';
 import { toast } from 'react-toastify';
 import axios from 'axios';
 
 const AdminProfile = () => {
-  const { aToken, backendUrl } = useContext(AdminContext);
+  const { aToken, backendUrl, setAToken } = useContext(AdminContext);
+  const navigate = useNavigate();
 
   const [isEdit, setIsEdit] = useState(false);
   const [name, setName] = useState('');
@@ -89,11 +91,13 @@ const AdminProfile = () => {
       );
 
       if (data.success) {
-        toast.success('Password changed successfully!');
-        setShowPasswordChange(false);
+        toast.success('Password changed successfully! Please log in again.');
         setOldPassword('');
         setNewPassword('');
         setConfirmPassword('');
+        setAToken('');
+        sessionStorage.removeItem('aToken');
+        navigate('/');
       } else {
         toast.error(data.message);
       }
@@ -184,14 +188,7 @@ const AdminProfile = () => {
                   Cancel
                 </button>
               </>
-            ) : (
-              <button
-                onClick={() => setIsEdit(true)}
-                className="px-6 py-2 border border-primary text-primary rounded-lg hover:bg-primary hover:text-white transition-all"
-              >
-                Edit Profile
-              </button>
-            )}
+            ) : null}
           </div>
         </div>
 
