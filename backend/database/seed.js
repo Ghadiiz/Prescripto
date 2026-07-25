@@ -40,6 +40,15 @@ const seedDatabase = async () => {
     );
     console.log(`Added admin: ${adminUser.email}\n`);
 
+    console.log('Inserting demo patient...');
+    const hashedDemoPassword = await bcrypt.hash('demo1234', 10);
+    await connection.query(
+      `INSERT INTO users (name, email, password, role, is_verified, gender, dob, phone)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      ['Demo Patient', 'demo@prescripto.com', hashedDemoPassword, 'patient', 1, 'Male', '1995-05-15', '+962 79 000 0000'],
+    );
+    console.log('Added demo patient: demo@prescripto.com\n');
+
     console.log('Inserting specialities with fixed IDs...');
     const specialityIdMap = {
       'General physician': 7,

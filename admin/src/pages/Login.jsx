@@ -80,6 +80,21 @@ const Login = () => {
             required
           />
         </div>
+        <div className="w-full mb-2 p-3 rounded-md bg-blue-50 border border-blue-100 text-xs text-gray-600">
+          <p className="font-medium text-gray-700 mb-1">Demo {state} login:</p>
+          {state === 'Admin' ? (
+            <>
+              <p>Email: admin@prescripto.com</p>
+              <p>Password: admin123</p>
+            </>
+          ) : (
+            <>
+              <p>Email: richard@example.com</p>
+              <p>Password: doctor123</p>
+            </>
+          )}
+        </div>
+
         <button className="bg-primary text-white w-full py-2 rounded-md text-base">
           Login
         </button>

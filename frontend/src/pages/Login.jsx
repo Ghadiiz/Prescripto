@@ -5,7 +5,7 @@ import { toast } from 'react-toastify';
 import { useNavigate } from 'react-router-dom';
 
 const Login = () => {
-  const [state, setState] = useState('Sign Up');
+  const [state, setState] = useState('Login');
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -110,6 +110,20 @@ const Login = () => {
           >
             Forgot Password?
           </button>
+        )}
+
+        {state === 'Login' && (
+          <div className="w-full mt-1 mb-1 p-3 rounded-md bg-blue-50 border border-blue-100 text-xs text-gray-600">
+            <p className="font-medium text-gray-700 mb-1">Demo account (for reviewers):</p>
+            <p>Email: demo@prescripto.com</p>
+            <p>Password: demo1234</p>
+          </div>
+        )}
+
+        {state === 'Sign Up' && (
+          <p className="w-full text-xs text-center text-gray-500 -mt-1 mb-1">
+            Reviewer? Switch to <span className="font-medium">Login</span> to use the demo account.
+          </p>
         )}
 
         <button
