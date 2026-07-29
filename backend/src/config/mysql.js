@@ -14,7 +14,7 @@ const connectDB = async () => {
       database: process.env.DB_NAME,
       port: process.env.DB_PORT || 3306,
       ...(process.env.DB_SSL === 'true' && {
-        ssl: { rejectUnauthorized: true },
+        ssl: { rejectUnauthorized: process.env.DB_SSL_REJECT_UNAUTHORIZED !== 'false' },
       }),
     });
 
