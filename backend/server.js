@@ -9,6 +9,7 @@ import appointmentRoutes from './src/appointments/routes/appointmentRoutes.js';
 import adminRoutes from './src/admin/routes/adminRoutes.js';
 import doctorPanelsRoutes from './src/doctors/routes/doctorPanelRoutes.js';
 import { notFound, errorHandler } from './src/middleware/errorHandler.js';
+import { databaseReady } from './src/middleware/databaseReady.js';
 import { AppError } from './src/utils/AppError.js';
 
 dotenv.config();
@@ -50,9 +51,16 @@ app.use(express.json());
 connectDB();
 connectCloudinary();
 
+// Not gated by databaseReady: this is what platform port detection and uptime
+// pings hit, and it touches no database, so it answers as soon as we listen.
 app.get('/', (req, res) => {
   res.send('Prescripto API is running...');
 });
+
+// Everything below needs the database. connectDB() above is intentionally not
+// awaited so the port binds immediately; this gate covers the window until it
+// resolves, answering 503 instead of letting getDB() throw into a 500.
+app.use('/api', databaseReady);
 
 app.use('/api/auth', authRoutes);
 app.use('/api/doctors', doctorRoutes);

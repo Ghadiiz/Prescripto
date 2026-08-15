@@ -4,6 +4,9 @@ import dotenv from 'dotenv';
 dotenv.config();
 
 let connection;
+// Readiness is exposed so requests arriving during the retry window below can
+// be answered with a 503 rather than reaching getDB() and throwing.
+let isReady = false;
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -21,6 +24,7 @@ const connectDB = async (retries = 10, delayMs = 5000) => {
         }),
       });
 
+      isReady = true;
       console.log('MySQL Doctor Appointment Database Connected...');
       return;
     } catch (error) {
@@ -43,4 +47,6 @@ const getDB = () => {
   return connection;
 };
 
-export { connectDB, getDB };
+const isDBReady = () => isReady;
+
+export { connectDB, getDB, isDBReady };

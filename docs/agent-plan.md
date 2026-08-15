@@ -89,13 +89,25 @@ Close the schema gaps so nothing later needs a workaround.
       specialities. `area` is nullable and unbackfilled, so 1.2 must read NULL
       as "unknown", not "no match".*
 - [x] **0.6** Update admin panel doctor create/edit forms for the new fields.
-- [ ] **0.7** Fix the startup race in `server.js`: `app.listen()` runs before
+- [x] **0.7** Fix the startup race in `server.js`: `app.listen()` runs before
       `connectDB()` resolves, so requests landing in that window fail with
       `Database not initialized` (`src/config/mysql.js`) behind a generic 500.
       Await the connection before accepting traffic, or gate requests on a
       readiness check that returns 503 until the pool is up — keeping the
       existing retry/backoff from commit `950f5e3`. Worst on a cold Render
-      boot. *Found during 0.1.*
+      boot. *Found during 0.1.* *Built as the readiness gate: `isDBReady()` in
+      `config/mysql.js` plus a `databaseReady` middleware mounted on `/api`,
+      answering 503 + `Retry-After` until the connection resolves. `GET /` is
+      deliberately ungated and `connectDB()` deliberately un-awaited, so the
+      port binds immediately and platform health checks still pass. Side
+      effect: unknown `/api/*` paths return 503 rather than 404 during the
+      startup window.*
+      - ***Seed guard added alongside it.** `database/seed.js` now refuses to
+        run unless `DB_HOST` is `localhost` or `127.0.0.1`, aborting with exit
+        1 before it opens a connection or issues any `DELETE`. The script wipes
+        all four tables, so pointing it at Aiven would destroy production data
+        — a real risk now that we are about to run migrations there. Added
+        after a local database was wiped this way during 0.2.*
 - [ ] **0.8** Deferred cleanup (tracking only — **not blocking Phase 0**):
       - **Hardcoded form option data.** The admin add/edit doctor forms
         hardcode dropdown options — speciality IDs 7–12, plus the

@@ -5,6 +5,19 @@ import { specialities, doctors, adminUser } from './seedData.js';
 
 dotenv.config();
 
+// This script opens with DELETE FROM on all four tables, so pointing it at a
+// remote database would erase live data. Refuse anything but a local host, at
+// module scope so it fires before the connection is opened and before any
+// destructive query — however the script is invoked.
+const dbHost = process.env.DB_HOST || '';
+if (dbHost !== 'localhost' && dbHost !== '127.0.0.1') {
+  console.error(
+    `Refusing to seed: DB_HOST is "${dbHost}", not localhost. ` +
+      `Seeding runs DELETE on all tables and would wipe this database. Aborting.`,
+  );
+  process.exit(1);
+}
+
 const seedDatabase = async () => {
   let connection;
 
