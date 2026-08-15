@@ -28,9 +28,15 @@ hits whatever `backend/.env` points at, which is normally local MySQL.
   Aiven** — the ledger row is written, and the ALTER would fail on duplicate
   columns anyway. Applied early, alone, as a canary for the runner against a
   managed host.
-- **002+ — NOT APPLIED.** Everything from 0.3 onward is local-only so far.
-  Apply the batch to Aiven at the **Phase 0 boundary**, after a fresh
-  `mysqldump`, with `DB_SSL=true` set.
+- **002, 003 and 004 — NOT APPLIED.** The pending Aiven batch is all three:
+  - `002_speciality_keywords.sql` — keyword table + 55 routing terms
+  - `003_assistant_tables.sql` — `assistant_audit_log`, `conversations`
+  - `004_doctors_area.sql` — `doctors.area` + `idx_area`
+
+  They go up **together at the Phase 0 boundary**, after a fresh `mysqldump`,
+  with `DB_SSL=true` set. Note that 004 adds `area` without a backfill, so
+  production doctors keep `area = NULL` until someone fills them in through the
+  admin forms — the seed script never runs there.
 
 `npm run seed` must never run against Aiven — it opens with `DELETE FROM` on all
 four tables.
@@ -71,9 +77,17 @@ Close the schema gaps so nothing later needs a workaround.
       - *`session_id` is an **opaque UUID string**, independent of
         `conversations` — audit rows are written before a conversation row
         exists and outlive the 30-day retention cut in 2.6.*
-- [ ] **0.5** Update the seed script: realistic Amman addresses (Abdali,
+- [x] **0.5** Update the seed script: realistic Amman addresses (Abdali,
       Shmeisani, Sweifieh, Khalda, Jabal Amman), populate the new doctor
-      columns. Add a "demo data" note.
+      columns. Add a "demo data" note. *Also added **migration 004** —
+      `area VARCHAR(100)` + `idx_area` on `doctors` — which wasn't in this
+      plan: 1.2's search takes an `area` filter and there was no column for it,
+      and a `LIKE` against `address_line2` would be unindexable and would break
+      on any admin who formats an address differently. The seed now populates
+      `area`, `experience_years`, `languages` and `gender` on all 16 doctors,
+      spread across the five districts with each area covering three
+      specialities. `area` is nullable and unbackfilled, so 1.2 must read NULL
+      as "unknown", not "no match".*
 - [ ] **0.6** Update admin panel doctor create/edit forms for the new fields.
 - [ ] **0.7** Fix the startup race in `server.js`: `app.listen()` runs before
       `connectDB()` resolves, so requests landing in that window fail with
