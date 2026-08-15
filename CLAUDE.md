@@ -34,14 +34,50 @@ handle HTTP only. Services hold business logic. Models hold SQL.
 
 ## Commands
 
-<!-- TODO: verify these against package.json in the first session -->
+No root `package.json` — every npm command runs inside `backend/`, `frontend/`
+or `admin/`.
+
+### Full stack (Docker)
 
 ```bash
-docker compose up          # local MySQL + services
-npm run dev                # backend with watch
-npm run seed               # seed the database
-npm test                   # tests
+docker compose up --build
 ```
+
+**Local development only.** The compose stack is never deployed — production is
+Vercel (frontends), Render (API) and Aiven (MySQL). The backend container sets
+`NODE_ENV=production`, which is a container setting, not a deploy target.
+
+Needs a root `.env` — `cp .env.example .env` and fill it in. This is a
+different file from `backend/.env`: Compose reads the root one for `${...}`
+substitution, the Node process reads the backend one via dotenv.
+
+Patient app on :5173, admin panel on :5174, API on :3000, MySQL on **:3307**
+(3307 avoids clashing with a local MySQL on 3306). `schema.sql` runs on first
+boot and creates tables only — no rows, so seed afterwards.
+
+### Backend (`cd backend`)
+
+```bash
+npm run server   # nodemon, watch mode
+npm start        # node server.js
+npm run seed     # populate the database (database/seed.js)
+```
+
+### Frontends (`cd frontend` or `cd admin`)
+
+```bash
+npm run dev      # Vite dev server
+npm run build
+npm run lint
+```
+
+`lint` currently fails in both apps (8 errors in `frontend`, 6 in `admin`).
+Pre-existing — don't treat a red lint run as something you caused.
+
+### Tests
+
+No test runner yet — `npm test` in `backend/` is still the npm placeholder that
+exits 1. Phase 1.8 requires one; choose and wire it up there.
 
 ## Database
 

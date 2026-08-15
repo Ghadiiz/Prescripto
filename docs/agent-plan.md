@@ -35,6 +35,13 @@ Close the schema gaps so nothing later needs a workaround.
       Shmeisani, Sweifieh, Khalda, Jabal Amman), populate the new doctor
       columns. Add a "demo data" note.
 - [ ] **0.6** Update admin panel doctor create/edit forms for the new fields.
+- [ ] **0.7** Fix the startup race in `server.js`: `app.listen()` runs before
+      `connectDB()` resolves, so requests landing in that window fail with
+      `Database not initialized` (`src/config/mysql.js`) behind a generic 500.
+      Await the connection before accepting traffic, or gate requests on a
+      readiness check that returns 503 until the pool is up — keeping the
+      existing retry/backoff from commit `950f5e3`. Worst on a cold Render
+      boot. *Found during 0.1.*
 
 **Done when:** a fresh `docker compose up` + seed produces doctors with numeric
 experience, languages, gender, and real Amman addresses.
