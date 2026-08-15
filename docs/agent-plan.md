@@ -20,7 +20,7 @@ Phases 0–4 alone are a complete, demonstrable project. 5–7 are additive.
 
 Close the schema gaps so nothing later needs a workaround.
 
-- [ ] **0.1** Verify and fill in the Commands section of `CLAUDE.md` from
+- [x] **0.1** Verify and fill in the Commands section of `CLAUDE.md` from
       `package.json` and `docker-compose.yml`. Confirm the app runs locally.
 - [ ] **0.2** Migration: add `experience_years INT`, `languages VARCHAR`,
       `gender ENUM` to `doctors`. Backfill `experience_years` from the existing
