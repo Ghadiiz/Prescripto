@@ -1,5 +1,13 @@
 import * as adminDoctorService from '../services/adminDoctorService.js';
-import { isValidEmail, isValidName, isValidPhone, isPositiveNumber } from '../../utils/validators.js';
+import {
+  isValidEmail,
+  isValidName,
+  isValidPhone,
+  isPositiveNumber,
+  isValidGender,
+  isValidArea,
+  isValidLanguages,
+} from '../../utils/validators.js';
 
 export const getAllDoctors = async (req, res, next) => {
   try {
@@ -57,6 +65,28 @@ export const addDoctor = async (req, res, next) => {
       });
     }
 
+    if (!isValidGender(doctorData.gender)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Gender must be Male or Female',
+      });
+    }
+
+    if (!isValidArea(doctorData.area)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Please select a valid area',
+      });
+    }
+
+    if (!isValidLanguages(doctorData.languages)) {
+      return res.status(400).json({
+        success: false,
+        message:
+          'Languages must be a comma-separated list without spaces, e.g. English,Arabic',
+      });
+    }
+
     const doctor = await adminDoctorService.addDoctor(doctorData, imageFile);
 
     res.status(201).json({
@@ -102,6 +132,28 @@ export const updateDoctor = async (req, res, next) => {
       return res.status(400).json({
         success: false,
         message: 'Please provide a valid phone number',
+      });
+    }
+
+    if (!isValidGender(doctorData.gender)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Gender must be Male or Female',
+      });
+    }
+
+    if (!isValidArea(doctorData.area)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Please select a valid area',
+      });
+    }
+
+    if (!isValidLanguages(doctorData.languages)) {
+      return res.status(400).json({
+        success: false,
+        message:
+          'Languages must be a comma-separated list without spaces, e.g. English,Arabic',
       });
     }
 

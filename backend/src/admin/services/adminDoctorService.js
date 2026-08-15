@@ -4,47 +4,74 @@ import crypto from 'crypto';
 import { sendDoctorSetPasswordEmail } from '../../utils/emailService.js';
 import { AppError } from '../../utils/AppError.js';
 
-export const getAllDoctors = async () => {
-  const pool = getDB();
-  const [doctors] = await pool.query(`
-    SELECT
+// `experience` is a display string ('4 Years'); `experience_years` is the
+// integer the assistant filters on. The admin form has one dropdown, and this
+// derives the second column from it so the two can never disagree. Same rule
+// migration 001 used to backfill.
+const toExperienceYears = (experience) => {
+  const match = String(experience ?? '').match(/\d+/);
+  return match ? Number(match[0]) : null;
+};
+
+// Shared by all three read-backs below. `speciality_id` is included because
+// the admin edit form prefills its dropdown from it — without it the form
+// falls back to General physician and silently rewrites the doctor on save.
+const DOCTOR_COLUMNS = `
       d.id,
       d.name,
       d.email,
       d.image,
+      d.speciality_id,
       s.name AS speciality,
       d.degree,
       d.experience,
+      d.experience_years,
+      d.languages,
+      d.gender,
       d.about,
       d.fees,
       d.address_line1,
       d.address_line2,
+      d.area,
       d.phone,
       d.available,
-      d.is_verified
+      d.is_verified`;
+
+const toDoctorResponse = (doc) => ({
+  id: doc.id,
+  name: doc.name,
+  email: doc.email,
+  image: doc.image,
+  speciality_id: doc.speciality_id,
+  speciality: doc.speciality,
+  degree: doc.degree,
+  experience: doc.experience,
+  experience_years: doc.experience_years,
+  languages: doc.languages,
+  gender: doc.gender,
+  about: doc.about,
+  fees: parseFloat(doc.fees),
+  address: {
+    line1: doc.address_line1,
+    line2: doc.address_line2,
+  },
+  area: doc.area,
+  phone: doc.phone,
+  available: Boolean(doc.available),
+  isVerified: Boolean(doc.is_verified),
+});
+
+export const getAllDoctors = async () => {
+  const pool = getDB();
+  const [doctors] = await pool.query(`
+    SELECT
+${DOCTOR_COLUMNS}
     FROM doctors d
     JOIN specialities s ON d.speciality_id = s.id
     ORDER BY d.id DESC
   `);
 
-  return doctors.map((doc) => ({
-    id: doc.id,
-    name: doc.name,
-    email: doc.email,
-    image: doc.image,
-    speciality: doc.speciality,
-    degree: doc.degree,
-    experience: doc.experience,
-    about: doc.about,
-    fees: parseFloat(doc.fees),
-    address: {
-      line1: doc.address_line1,
-      line2: doc.address_line2,
-    },
-    phone: doc.phone,
-    available: Boolean(doc.available),
-    isVerified: Boolean(doc.is_verified),
-  }));
+  return doctors.map(toDoctorResponse);
 };
 
 export const addDoctor = async (doctorData, imageFile) => {
@@ -61,10 +88,13 @@ export const addDoctor = async (doctorData, imageFile) => {
     speciality_id,
     degree,
     experience,
+    languages,
+    gender,
     about,
     fees,
     address_line1,
     address_line2,
+    area,
     phone,
   } = doctorData;
 
@@ -81,8 +111,8 @@ export const addDoctor = async (doctorData, imageFile) => {
 
   const [result] = await pool.query(
     `INSERT INTO doctors
-    (name, email, password, image, speciality_id, degree, experience, about, fees, address_line1, address_line2, phone, available, is_verified, verification_token, verification_token_expires)
-    VALUES (?, ?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, true, 0, ?, ?)`,
+    (name, email, password, image, speciality_id, degree, experience, experience_years, languages, gender, about, fees, address_line1, address_line2, area, phone, available, is_verified, verification_token, verification_token_expires)
+    VALUES (?, ?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, true, 0, ?, ?)`,
     [
       name,
       email,
@@ -90,10 +120,14 @@ export const addDoctor = async (doctorData, imageFile) => {
       speciality_id,
       degree,
       experience,
+      toExperienceYears(experience),
+      languages || null,
+      gender || null,
       about,
       fees,
       address_line1,
       address_line2,
+      area || null,
       phone,
       verificationToken,
       tokenExpires,
@@ -108,44 +142,14 @@ export const addDoctor = async (doctorData, imageFile) => {
 
   const [doctors] = await pool.query(
     `SELECT
-      d.id,
-      d.name,
-      d.email,
-      d.image,
-      s.name AS speciality,
-      d.degree,
-      d.experience,
-      d.about,
-      d.fees,
-      d.address_line1,
-      d.address_line2,
-      d.available,
-      d.is_verified
+${DOCTOR_COLUMNS}
     FROM doctors d
     JOIN specialities s ON d.speciality_id = s.id
     WHERE d.id = ?`,
     [result.insertId],
   );
 
-  const doc = doctors[0];
-
-  return {
-    id: doc.id,
-    name: doc.name,
-    email: doc.email,
-    image: doc.image,
-    speciality: doc.speciality,
-    degree: doc.degree,
-    experience: doc.experience,
-    about: doc.about,
-    fees: parseFloat(doc.fees),
-    address: {
-      line1: doc.address_line1,
-      line2: doc.address_line2,
-    },
-    available: Boolean(doc.available),
-    isVerified: Boolean(doc.is_verified),
-  };
+  return toDoctorResponse(doctors[0]);
 };
 
 export const updateDoctor = async (doctorId, doctorData, imageFile) => {
@@ -173,10 +177,13 @@ export const updateDoctor = async (doctorId, doctorData, imageFile) => {
     speciality_id,
     degree,
     experience,
+    languages,
+    gender,
     about,
     fees,
     address_line1,
     address_line2,
+    area,
     phone,
   } = doctorData;
 
@@ -189,7 +196,8 @@ export const updateDoctor = async (doctorId, doctorData, imageFile) => {
   await pool.query(
     `UPDATE doctors
     SET name = ?, email = ?, password = ?, image = ?, speciality_id = ?, degree = ?,
-    experience = ?, about = ?, fees = ?, address_line1 = ?, address_line2 = ?, phone = ?
+    experience = ?, experience_years = ?, languages = ?, gender = ?, about = ?, fees = ?,
+    address_line1 = ?, address_line2 = ?, area = ?, phone = ?
     WHERE id = ?`,
     [
       name,
@@ -199,10 +207,14 @@ export const updateDoctor = async (doctorId, doctorData, imageFile) => {
       speciality_id,
       degree,
       experience,
+      toExperienceYears(experience),
+      languages || null,
+      gender || null,
       about,
       fees,
       address_line1,
       address_line2,
+      area || null,
       phone,
       doctorId,
     ],
@@ -210,46 +222,14 @@ export const updateDoctor = async (doctorId, doctorData, imageFile) => {
 
   const [doctors] = await pool.query(
     `SELECT
-      d.id,
-      d.name,
-      d.email,
-      d.image,
-      s.name AS speciality,
-      d.degree,
-      d.experience,
-      d.about,
-      d.fees,
-      d.address_line1,
-      d.address_line2,
-      d.phone,
-      d.available,
-      d.is_verified
+${DOCTOR_COLUMNS}
     FROM doctors d
     JOIN specialities s ON d.speciality_id = s.id
     WHERE d.id = ?`,
     [doctorId],
   );
 
-  const doc = doctors[0];
-
-  return {
-    id: doc.id,
-    name: doc.name,
-    email: doc.email,
-    image: doc.image,
-    speciality: doc.speciality,
-    degree: doc.degree,
-    experience: doc.experience,
-    about: doc.about,
-    fees: parseFloat(doc.fees),
-    address: {
-      line1: doc.address_line1,
-      line2: doc.address_line2,
-    },
-    phone: doc.phone,
-    available: Boolean(doc.available),
-    isVerified: Boolean(doc.is_verified),
-  };
+  return toDoctorResponse(doctors[0]);
 };
 
 export const deleteDoctor = async (doctorId) => {

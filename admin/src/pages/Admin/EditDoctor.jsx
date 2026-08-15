@@ -20,11 +20,57 @@ const EditDoctor = () => {
   const [address1, setAddress1] = useState('');
   const [address2, setAddress2] = useState('');
   const [phone, setPhone] = useState('');
+  const [languages, setLanguages] = useState([]);
+  const [gender, setGender] = useState('');
+  const [area, setArea] = useState('');
   const [currentImage, setCurrentImage] = useState('');
   const [loading, setLoading] = useState(true);
 
   const { backendUrl, aToken, doctors, getAllDoctors } =
     useContext(AdminContext);
+
+  const toggleLanguage = (language) => {
+    setLanguages((current) =>
+      current.includes(language)
+        ? current.filter((item) => item !== language)
+        : [...current, language],
+    );
+  };
+
+  // Shared by both load paths below (context and API fallback) so the two
+  // can't drift apart.
+  const applyDoctorToForm = (doctor) => {
+    setName(doctor.name || '');
+    setEmail(doctor.email || '');
+    setExperience(doctor.experience || '1 Year');
+    setFees(doctor.fees || '');
+    setAbout(doctor.about || '');
+    setSpeciality(doctor.speciality_id?.toString() || '7');
+    setDegree(doctor.degree || '');
+    setPhone(doctor.phone || '');
+    setCurrentImage(doctor.image || '');
+    setLanguages(doctor.languages ? doctor.languages.split(',') : []);
+    setGender(doctor.gender || '');
+    setArea(doctor.area || '');
+
+    if (doctor.address) {
+      try {
+        let addr;
+        if (typeof doctor.address === 'string') {
+          addr = JSON.parse(doctor.address);
+        } else if (typeof doctor.address === 'object') {
+          addr = doctor.address;
+        }
+
+        if (addr) {
+          setAddress1(addr.line1 ?? '');
+          setAddress2(addr.line2 ?? '');
+        }
+      } catch (e) {
+        console.error('Error parsing address:', e);
+      }
+    }
+  };
 
   useEffect(() => {
     const loadDoctorData = async () => {
@@ -35,42 +81,7 @@ const EditDoctor = () => {
       const doctor = doctors.find((doc) => doc.id === parseInt(id));
 
       if (doctor) {
-        setName(doctor.name || '');
-        setEmail(doctor.email || '');
-        setExperience(doctor.experience || '1 Year');
-        setFees(doctor.fees || '');
-        setAbout(doctor.about || '');
-        setSpeciality(doctor.speciality_id?.toString() || '7');
-        setDegree(doctor.degree || '');
-        setPhone(doctor.phone || '');
-        setCurrentImage(doctor.image || '');
-
-        if (doctor.address) {
-          try {
-            let addr;
-            if (typeof doctor.address === 'string') {
-              addr = JSON.parse(doctor.address);
-            } else if (typeof doctor.address === 'object') {
-              addr = doctor.address;
-            }
-
-            if (addr) {
-              const line1 =
-                addr.line1 !== null && addr.line1 !== undefined
-                  ? addr.line1
-                  : '';
-              const line2 =
-                addr.line2 !== null && addr.line2 !== undefined
-                  ? addr.line2
-                  : '';
-              setAddress1(line1);
-              setAddress2(line2);
-            }
-          } catch (e) {
-            console.error('Error parsing address:', e);
-          }
-        }
-
+        applyDoctorToForm(doctor);
         setLoading(false);
       } else {
         fetchDoctorFromAPI();
@@ -90,40 +101,7 @@ const EditDoctor = () => {
         const doctor = data.data.find((doc) => doc.id === parseInt(id));
 
         if (doctor) {
-          setName(doctor.name || '');
-          setEmail(doctor.email || '');
-          setExperience(doctor.experience || '1 Year');
-          setFees(doctor.fees || '');
-          setAbout(doctor.about || '');
-          setSpeciality(doctor.speciality_id?.toString() || '7');
-          setDegree(doctor.degree || '');
-          setCurrentImage(doctor.image || '');
-
-          if (doctor.address) {
-            try {
-              let addr;
-              if (typeof doctor.address === 'string') {
-                addr = JSON.parse(doctor.address);
-              } else if (typeof doctor.address === 'object') {
-                addr = doctor.address;
-              }
-
-              if (addr) {
-                const line1 =
-                  addr.line1 !== null && addr.line1 !== undefined
-                    ? addr.line1
-                    : '';
-                const line2 =
-                  addr.line2 !== null && addr.line2 !== undefined
-                    ? addr.line2
-                    : '';
-                setAddress1(line1);
-                setAddress2(line2);
-              }
-            } catch (e) {
-              console.error('Error parsing address:', e);
-            }
-          }
+          applyDoctorToForm(doctor);
         } else {
           toast.error('Doctor not found');
           navigate('/admin/doctors-list');
@@ -159,6 +137,10 @@ const EditDoctor = () => {
       formData.append('address_line1', address1);
       formData.append('address_line2', address2);
       formData.append('phone', phone);
+      // Comma-separated, no spaces — the backend matches with FIND_IN_SET.
+      formData.append('languages', languages.join(','));
+      formData.append('gender', gender);
+      formData.append('area', area);
 
       const { data } = await axios.put(
         backendUrl + `/api/admin/doctors/${id}`,
@@ -324,6 +306,51 @@ const EditDoctor = () => {
                 placeholder="Address 2"
                 required
               />
+            </div>
+
+            <div className="flex-1 flex flex-col gap-1">
+              <p>Area</p>
+              <select
+                onChange={(e) => setArea(e.target.value)}
+                value={area}
+                className="border rounded px-3 py-2"
+              >
+                <option value="">Not specified</option>
+                <option value="Abdali">Abdali</option>
+                <option value="Shmeisani">Shmeisani</option>
+                <option value="Sweifieh">Sweifieh</option>
+                <option value="Khalda">Khalda</option>
+                <option value="Jabal Amman">Jabal Amman</option>
+              </select>
+            </div>
+
+            <div className="flex-1 flex flex-col gap-1">
+              <p>Gender</p>
+              <select
+                onChange={(e) => setGender(e.target.value)}
+                value={gender}
+                className="border rounded px-3 py-2"
+              >
+                <option value="">Not specified</option>
+                <option value="Male">Male</option>
+                <option value="Female">Female</option>
+              </select>
+            </div>
+
+            <div className="flex-1 flex flex-col gap-1">
+              <p>Languages</p>
+              <div className="flex gap-4 border rounded px-3 py-2">
+                {['English', 'Arabic', 'French'].map((language) => (
+                  <label key={language} className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      checked={languages.includes(language)}
+                      onChange={() => toggleLanguage(language)}
+                    />
+                    {language}
+                  </label>
+                ))}
+              </div>
             </div>
 
             <div className="flex-1 flex flex-col gap-1">

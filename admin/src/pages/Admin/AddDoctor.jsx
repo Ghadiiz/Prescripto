@@ -17,8 +17,19 @@ const AddDoctor = () => {
   const [address1, setAddress1] = useState('');
   const [address2, setAddress2] = useState('');
   const [phone, setPhone] = useState('');
+  const [languages, setLanguages] = useState([]);
+  const [gender, setGender] = useState('');
+  const [area, setArea] = useState('');
 
   const { backendUrl, aToken } = useContext(AdminContext);
+
+  const toggleLanguage = (language) => {
+    setLanguages((current) =>
+      current.includes(language)
+        ? current.filter((item) => item !== language)
+        : [...current, language],
+    );
+  };
 
   const onSubmitHandler = async (event) => {
     event.preventDefault();
@@ -42,6 +53,10 @@ const AddDoctor = () => {
       formData.append('address_line1', address1);
       formData.append('address_line2', address2);
       formData.append('phone', phone);
+      // Comma-separated, no spaces — the backend matches with FIND_IN_SET.
+      formData.append('languages', languages.join(','));
+      formData.append('gender', gender);
+      formData.append('area', area);
 
       const { data } = await axios.post(
         backendUrl + '/api/admin/doctors',
@@ -66,6 +81,9 @@ const AddDoctor = () => {
         setAbout('');
         setFees('');
         setSpeciality('7');
+        setLanguages([]);
+        setGender('');
+        setArea('');
       } else {
         toast.error(data.message);
       }
@@ -209,6 +227,51 @@ const AddDoctor = () => {
                 placeholder="Address 2"
                 required
               />
+            </div>
+
+            <div className="flex-1 flex flex-col gap-1">
+              <p>Area</p>
+              <select
+                onChange={(e) => setArea(e.target.value)}
+                value={area}
+                className="border rounded px-3 py-2"
+              >
+                <option value="">Not specified</option>
+                <option value="Abdali">Abdali</option>
+                <option value="Shmeisani">Shmeisani</option>
+                <option value="Sweifieh">Sweifieh</option>
+                <option value="Khalda">Khalda</option>
+                <option value="Jabal Amman">Jabal Amman</option>
+              </select>
+            </div>
+
+            <div className="flex-1 flex flex-col gap-1">
+              <p>Gender</p>
+              <select
+                onChange={(e) => setGender(e.target.value)}
+                value={gender}
+                className="border rounded px-3 py-2"
+              >
+                <option value="">Not specified</option>
+                <option value="Male">Male</option>
+                <option value="Female">Female</option>
+              </select>
+            </div>
+
+            <div className="flex-1 flex flex-col gap-1">
+              <p>Languages</p>
+              <div className="flex gap-4 border rounded px-3 py-2">
+                {['English', 'Arabic', 'French'].map((language) => (
+                  <label key={language} className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      checked={languages.includes(language)}
+                      onChange={() => toggleLanguage(language)}
+                    />
+                    {language}
+                  </label>
+                ))}
+              </div>
             </div>
 
             <div className="flex-1 flex flex-col gap-1">
