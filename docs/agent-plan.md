@@ -16,15 +16,39 @@ Phases 0–4 alone are a complete, demonstrable project. 5–7 are additive.
 
 ---
 
+## Production state (Aiven)
+
+Which migrations have been applied to the **Aiven production database**. Local
+and production are migrated separately — `npm run migrate` from a dev machine
+hits whatever `backend/.env` points at, which is normally local MySQL.
+
+- **001_doctors_profile_fields.sql — APPLIED.** `experience_years`, `languages`
+  and `gender` exist on `doctors`, and the backfill has converted the
+  `experience` strings to integers on all 16 rows. **Do not re-run 001 against
+  Aiven** — the ledger row is written, and the ALTER would fail on duplicate
+  columns anyway. Applied early, alone, as a canary for the runner against a
+  managed host.
+- **002+ — NOT APPLIED.** Everything from 0.3 onward is local-only so far.
+  Apply the batch to Aiven at the **Phase 0 boundary**, after a fresh
+  `mysqldump`, with `DB_SSL=true` set.
+
+`npm run seed` must never run against Aiven — it opens with `DELETE FROM` on all
+four tables.
+
+---
+
 ## Phase 0 — Database and seed data
 
 Close the schema gaps so nothing later needs a workaround.
 
 - [x] **0.1** Verify and fill in the Commands section of `CLAUDE.md` from
       `package.json` and `docker-compose.yml`. Confirm the app runs locally.
-- [ ] **0.2** Migration: add `experience_years INT`, `languages VARCHAR`,
+- [x] **0.2** Migration: add `experience_years INT`, `languages VARCHAR`,
       `gender ENUM` to `doctors`. Backfill `experience_years` from the existing
-      `experience` VARCHAR. Keep the old column for now.
+      `experience` VARCHAR. Keep the old column for now. *Also established the
+      migration mechanism the later increments reuse: `database/migrate.js`,
+      `database/migrations/*.sql`, ledger in `schema_migrations`. **Applied to
+      Aiven** — see Production state above.*
 - [ ] **0.3** Migration: create `speciality_keywords` (id, keyword,
       speciality_id, FK). Seed with ~40 common non-diagnostic terms mapping to
       existing specialities.
