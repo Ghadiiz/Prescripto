@@ -55,9 +55,22 @@ Close the schema gaps so nothing later needs a workaround.
       on speciality name rather than id. Emergency phrasings deliberately
       excluded — 2.4's `emergencyCheck` handles those. Local only; **not applied
       to Aiven**.*
-- [ ] **0.4** Migration: create `assistant_audit_log` (id, session_id, user_id,
+- [x] **0.4** Migration: create `assistant_audit_log` (id, session_id, user_id,
       role, tool_name, arguments JSON, result_count, created_at) and
-      `conversations` (id, user_id, messages JSON, created_at, updated_at).
+      `conversations` (id, user_id, **role**, messages JSON, created_at,
+      updated_at). *Built as `003_assistant_tables.sql`, with three deviations
+      from the shape above:*
+      - *`conversations` is keyed on **(user_id, role)**, not `user_id` alone.
+        Patient ids come from `users` and doctor ids from `doctors` — separate
+        tables with overlapping id spaces — so `user_id` by itself is
+        ambiguous, and patient #5 would share a history with doctor #5 once
+        doctors get their own assistant in 5.6.*
+      - ***Neither table has a FK on `user_id`** — there is no single table to
+        reference. For `assistant_audit_log` this is also deliberate: deleting
+        an account must not cascade-erase its audit trail.*
+      - *`session_id` is an **opaque UUID string**, independent of
+        `conversations` — audit rows are written before a conversation row
+        exists and outlive the 30-day retention cut in 2.6.*
 - [ ] **0.5** Update the seed script: realistic Amman addresses (Abdali,
       Shmeisani, Sweifieh, Khalda, Jabal Amman), populate the new doctor
       columns. Add a "demo data" note.
