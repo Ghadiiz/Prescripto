@@ -49,9 +49,12 @@ Close the schema gaps so nothing later needs a workaround.
       migration mechanism the later increments reuse: `database/migrate.js`,
       `database/migrations/*.sql`, ledger in `schema_migrations`. **Applied to
       Aiven** — see Production state above.*
-- [ ] **0.3** Migration: create `speciality_keywords` (id, keyword,
+- [x] **0.3** Migration: create `speciality_keywords` (id, keyword,
       speciality_id, FK). Seed with ~40 common non-diagnostic terms mapping to
-      existing specialities.
+      existing specialities. *55 terms in `002_speciality_keywords.sql`, joined
+      on speciality name rather than id. Emergency phrasings deliberately
+      excluded — 2.4's `emergencyCheck` handles those. Local only; **not applied
+      to Aiven**.*
 - [ ] **0.4** Migration: create `assistant_audit_log` (id, session_id, user_id,
       role, tool_name, arguments JSON, result_count, created_at) and
       `conversations` (id, user_id, messages JSON, created_at, updated_at).
