@@ -60,8 +60,15 @@ boot and creates tables only — no rows, so seed afterwards.
 ```bash
 npm run server   # nodemon, watch mode
 npm start        # node server.js
+npm run migrate  # apply pending migrations (database/migrations/*.sql)
 npm run seed     # populate the database (database/seed.js)
 ```
+
+`schema.sql` is the baseline and only runs on a fresh database; every schema
+change after it is a file in `database/migrations/`, applied by `npm run
+migrate` and tracked in the `schema_migrations` table. Do not add new columns to
+`schema.sql` — a fresh boot would create them and the migration would then fail
+as a duplicate. Order after a fresh `docker compose up`: **migrate, then seed.**
 
 ### Frontends (`cd frontend` or `cd admin`)
 
