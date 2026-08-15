@@ -88,7 +88,7 @@ Close the schema gaps so nothing later needs a workaround.
       spread across the five districts with each area covering three
       specialities. `area` is nullable and unbackfilled, so 1.2 must read NULL
       as "unknown", not "no match".*
-- [ ] **0.6** Update admin panel doctor create/edit forms for the new fields.
+- [x] **0.6** Update admin panel doctor create/edit forms for the new fields.
 - [ ] **0.7** Fix the startup race in `server.js`: `app.listen()` runs before
       `connectDB()` resolves, so requests landing in that window fail with
       `Database not initialized` (`src/config/mysql.js`) behind a generic 500.
