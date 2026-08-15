@@ -12,6 +12,31 @@ const AdminContextProvider = (props) => {
   const [appointments, setAppointments] = useState([]);
   const [doctors, setDoctors] = useState([]);
   const [dashData, setDashData] = useState(false);
+  // Dropdown options for the doctor forms, served by the backend so the lists
+  // the forms offer and the lists the API validates against are the same.
+  // Empty arrays keep .map() safe before the fetch lands.
+  const [doctorOptions, setDoctorOptions] = useState({
+    specialities: [],
+    areas: [],
+    genders: [],
+    languages: [],
+  });
+
+  const getDoctorOptions = async () => {
+    try {
+      const { data } = await axios.get(backendUrl + '/api/admin/doctor-options', {
+        headers: { Authorization: `Bearer ${aToken}` },
+      });
+      if (data.success) {
+        setDoctorOptions(data.data);
+      } else {
+        toast.error(data.message);
+      }
+    } catch (error) {
+      console.error('Get doctor options error:', error);
+      toast.error(error.response?.data?.message || error.message);
+    }
+  };
 
   const getAllDoctors = async () => {
     try {
@@ -133,6 +158,8 @@ const AdminContextProvider = (props) => {
     backendUrl,
     doctors,
     getAllDoctors,
+    doctorOptions,
+    getDoctorOptions,
     changeAvailability,
     deleteDoctor,
     updateDoctor,

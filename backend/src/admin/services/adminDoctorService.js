@@ -3,6 +3,11 @@ import { uploadToCloudinary } from '../../config/cloudinary.js';
 import crypto from 'crypto';
 import { sendDoctorSetPasswordEmail } from '../../utils/emailService.js';
 import { AppError } from '../../utils/AppError.js';
+import {
+  DOCTOR_LANGUAGES,
+  DOCTOR_AREAS,
+  DOCTOR_GENDERS,
+} from '../../constants/doctorOptions.js';
 
 // `experience` is a display string ('4 Years'); `experience_years` is the
 // integer the assistant filters on. The admin form has one dropdown, and this
@@ -60,6 +65,26 @@ const toDoctorResponse = (doc) => ({
   available: Boolean(doc.available),
   isVerified: Boolean(doc.is_verified),
 });
+
+// Serves the admin doctor forms their dropdown options. Specialities come from
+// the table rather than a hardcoded list, and the other three from the same
+// constants the validators enforce — so the options a form offers and the
+// values the API accepts cannot drift apart.
+export const getDoctorOptions = async () => {
+  const pool = getDB();
+
+  // ORDER BY id reproduces the order the forms used while these were hardcoded.
+  const [specialities] = await pool.query(
+    'SELECT id, name FROM specialities ORDER BY id',
+  );
+
+  return {
+    specialities,
+    areas: DOCTOR_AREAS,
+    genders: DOCTOR_GENDERS,
+    languages: DOCTOR_LANGUAGES,
+  };
+};
 
 export const getAllDoctors = async () => {
   const pool = getDB();

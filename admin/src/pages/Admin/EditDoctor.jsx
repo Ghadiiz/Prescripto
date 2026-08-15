@@ -26,8 +26,16 @@ const EditDoctor = () => {
   const [currentImage, setCurrentImage] = useState('');
   const [loading, setLoading] = useState(true);
 
-  const { backendUrl, aToken, doctors, getAllDoctors } =
+  const { backendUrl, aToken, doctors, getAllDoctors, doctorOptions, getDoctorOptions } =
     useContext(AdminContext);
+
+  const optionsLoaded = doctorOptions.specialities.length > 0;
+
+  useEffect(() => {
+    if (!optionsLoaded) {
+      getDoctorOptions();
+    }
+  }, []);
 
   const toggleLanguage = (language) => {
     setLanguages((current) =>
@@ -45,7 +53,9 @@ const EditDoctor = () => {
     setExperience(doctor.experience || '1 Year');
     setFees(doctor.fees || '');
     setAbout(doctor.about || '');
-    setSpeciality(doctor.speciality_id?.toString() || '7');
+    // No hardcoded fallback id — a missing speciality_id leaves the select
+    // empty rather than silently reassigning the doctor on save.
+    setSpeciality(doctor.speciality_id?.toString() || '');
     setDegree(doctor.degree || '');
     setPhone(doctor.phone || '');
     setCurrentImage(doctor.image || '');
@@ -164,7 +174,7 @@ const EditDoctor = () => {
     }
   };
 
-  if (loading) {
+  if (loading || !optionsLoaded) {
     return (
       <div className="m-5">
         <p>Loading doctor data...</p>
@@ -266,13 +276,13 @@ const EditDoctor = () => {
                 onChange={(e) => setSpeciality(e.target.value)}
                 value={speciality}
                 className="border rounded px-3 py-2"
+                required
               >
-                <option value="7">General physician</option>
-                <option value="8">Gynecologist</option>
-                <option value="9">Dermatologist</option>
-                <option value="10">Pediatricians</option>
-                <option value="11">Neurologist</option>
-                <option value="12">Gastroenterologist</option>
+                {doctorOptions.specialities.map((item) => (
+                  <option key={item.id} value={item.id}>
+                    {item.name}
+                  </option>
+                ))}
               </select>
             </div>
 
@@ -316,11 +326,11 @@ const EditDoctor = () => {
                 className="border rounded px-3 py-2"
               >
                 <option value="">Not specified</option>
-                <option value="Abdali">Abdali</option>
-                <option value="Shmeisani">Shmeisani</option>
-                <option value="Sweifieh">Sweifieh</option>
-                <option value="Khalda">Khalda</option>
-                <option value="Jabal Amman">Jabal Amman</option>
+                {doctorOptions.areas.map((item) => (
+                  <option key={item} value={item}>
+                    {item}
+                  </option>
+                ))}
               </select>
             </div>
 
@@ -332,15 +342,18 @@ const EditDoctor = () => {
                 className="border rounded px-3 py-2"
               >
                 <option value="">Not specified</option>
-                <option value="Male">Male</option>
-                <option value="Female">Female</option>
+                {doctorOptions.genders.map((item) => (
+                  <option key={item} value={item}>
+                    {item}
+                  </option>
+                ))}
               </select>
             </div>
 
             <div className="flex-1 flex flex-col gap-1">
               <p>Languages</p>
               <div className="flex gap-4 border rounded px-3 py-2">
-                {['English', 'Arabic', 'French'].map((language) => (
+                {doctorOptions.languages.map((language) => (
                   <label key={language} className="flex items-center gap-2">
                     <input
                       type="checkbox"

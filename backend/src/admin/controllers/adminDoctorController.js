@@ -9,6 +9,19 @@ import {
   isValidLanguages,
 } from '../../utils/validators.js';
 
+export const getDoctorOptions = async (req, res, next) => {
+  try {
+    const options = await adminDoctorService.getDoctorOptions();
+
+    res.status(200).json({
+      success: true,
+      data: options,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
 export const getAllDoctors = async (req, res, next) => {
   try {
     const doctors = await adminDoctorService.getAllDoctors();

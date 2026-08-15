@@ -27,6 +27,12 @@ router.put(
 );
 
 router.get(
+  '/doctor-options',
+  adminAuthMiddleware,
+  adminDoctorController.getDoctorOptions,
+);
+
+router.get(
   '/doctors',
   adminAuthMiddleware,
   adminDoctorController.getAllDoctors,

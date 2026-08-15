@@ -1,4 +1,4 @@
-import React, { useContext, useState } from 'react';
+import React, { useContext, useState, useEffect } from 'react';
 import { assets } from '../../assets/assets';
 import { AdminContext } from '../../context/AdminContext';
 import { toast } from 'react-toastify';
@@ -12,7 +12,9 @@ const AddDoctor = () => {
   const [experience, setExperience] = useState('1 Year');
   const [fees, setFees] = useState('');
   const [about, setAbout] = useState('');
-  const [speciality, setSpeciality] = useState('7');
+  // Starts empty and is set from the fetched options below, rather than
+  // assuming a speciality id exists.
+  const [speciality, setSpeciality] = useState('');
   const [degree, setDegree] = useState('');
   const [address1, setAddress1] = useState('');
   const [address2, setAddress2] = useState('');
@@ -21,7 +23,21 @@ const AddDoctor = () => {
   const [gender, setGender] = useState('');
   const [area, setArea] = useState('');
 
-  const { backendUrl, aToken } = useContext(AdminContext);
+  const { backendUrl, aToken, doctorOptions, getDoctorOptions } =
+    useContext(AdminContext);
+
+  const optionsLoaded = doctorOptions.specialities.length > 0;
+
+  useEffect(() => {
+    if (!optionsLoaded) {
+      getDoctorOptions();
+    }
+  }, []);
+
+  // Derived rather than synced into state with an effect: until the admin
+  // picks one, the selection is the first speciality the endpoint returned.
+  const selectedSpeciality =
+    speciality || doctorOptions.specialities[0]?.id?.toString() || '';
 
   const toggleLanguage = (language) => {
     setLanguages((current) =>
@@ -48,7 +64,7 @@ const AddDoctor = () => {
       formData.append('experience', experience);
       formData.append('fees', Number(fees));
       formData.append('about', about);
-      formData.append('speciality_id', Number(speciality));
+      formData.append('speciality_id', Number(selectedSpeciality));
       formData.append('degree', degree);
       formData.append('address_line1', address1);
       formData.append('address_line2', address2);
@@ -80,7 +96,7 @@ const AddDoctor = () => {
         setDegree('');
         setAbout('');
         setFees('');
-        setSpeciality('7');
+        setSpeciality('');
         setLanguages([]);
         setGender('');
         setArea('');
@@ -185,15 +201,20 @@ const AddDoctor = () => {
               <p>Speciality</p>
               <select
                 onChange={(e) => setSpeciality(e.target.value)}
-                value={speciality}
+                value={selectedSpeciality}
                 className="border rounded px-3 py-2"
+                disabled={!optionsLoaded}
+                required
               >
-                <option value="7">General physician</option>
-                <option value="8">Gynecologist</option>
-                <option value="9">Dermatologist</option>
-                <option value="10">Pediatricians</option>
-                <option value="11">Neurologist</option>
-                <option value="12">Gastroenterologist</option>
+                {optionsLoaded ? (
+                  doctorOptions.specialities.map((item) => (
+                    <option key={item.id} value={item.id}>
+                      {item.name}
+                    </option>
+                  ))
+                ) : (
+                  <option value="">Loading options…</option>
+                )}
               </select>
             </div>
 
@@ -237,11 +258,11 @@ const AddDoctor = () => {
                 className="border rounded px-3 py-2"
               >
                 <option value="">Not specified</option>
-                <option value="Abdali">Abdali</option>
-                <option value="Shmeisani">Shmeisani</option>
-                <option value="Sweifieh">Sweifieh</option>
-                <option value="Khalda">Khalda</option>
-                <option value="Jabal Amman">Jabal Amman</option>
+                {doctorOptions.areas.map((item) => (
+                  <option key={item} value={item}>
+                    {item}
+                  </option>
+                ))}
               </select>
             </div>
 
@@ -253,15 +274,18 @@ const AddDoctor = () => {
                 className="border rounded px-3 py-2"
               >
                 <option value="">Not specified</option>
-                <option value="Male">Male</option>
-                <option value="Female">Female</option>
+                {doctorOptions.genders.map((item) => (
+                  <option key={item} value={item}>
+                    {item}
+                  </option>
+                ))}
               </select>
             </div>
 
             <div className="flex-1 flex flex-col gap-1">
               <p>Languages</p>
               <div className="flex gap-4 border rounded px-3 py-2">
-                {['English', 'Arabic', 'French'].map((language) => (
+                {doctorOptions.languages.map((language) => (
                   <label key={language} className="flex items-center gap-2">
                     <input
                       type="checkbox"
@@ -301,9 +325,10 @@ const AddDoctor = () => {
 
         <button
           type="submit"
-          className="bg-primary px-10 py-3 mt-4 text-white rounded-full"
+          disabled={!optionsLoaded}
+          className="bg-primary px-10 py-3 mt-4 text-white rounded-full disabled:opacity-50"
         >
-          Add doctor
+          {optionsLoaded ? 'Add doctor' : 'Loading…'}
         </button>
       </div>
     </form>

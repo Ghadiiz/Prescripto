@@ -118,20 +118,25 @@ Close the schema gaps so nothing later needs a workaround.
         all four tables, so pointing it at Aiven would destroy production data
         — a real risk now that we are about to run migrations there. Added
         after a local database was wiped this way during 0.2.*
-- [ ] **0.8** Deferred cleanup (tracking only — **not blocking Phase 0**):
-      - **Hardcoded form option data.** The admin add/edit doctor forms
-        hardcode dropdown options — speciality IDs 7–12, plus the
-        district/gender/language lists — in the JSX, mirrored by enforcement
-        constants in the backend (`constants/doctorOptions.js`). Adding e.g. a
-        district means editing three places, and a mismatch means the form
-        offers a value the API rejects with 400. Same fragility migration 002
-        avoided by joining on `specialities.name`. Consider serving these
-        option lists from an endpoint so there is one source of truth.
-        *Found during 0.6.*
-      - **Shared doctor phone number.** All 16 seeded doctors share
-        `+962 79 000 0000` (`seed.js`). Cosmetic but visible in the live demo —
-        give each a distinct placeholder or consciously accept it.
-        *Found during 0.5.*
+- [x] **0.8** Deferred cleanup (tracking only — **not blocking Phase 0**):
+      - **Hardcoded form option data — DONE.** The admin forms used to hardcode
+        their dropdown options (speciality IDs 7–12, plus the
+        district/gender/language lists) in the JSX, mirrored by the enforcement
+        constants in `constants/doctorOptions.js` — three places to edit, and a
+        mismatch meant the form offering a value the API rejects with 400.
+        *Fixed with `GET /api/admin/doctor-options` (admin-authed), which
+        serves specialities from the `specialities` table and area/gender/
+        language from the same constants the validators enforce. Both forms
+        fetch via `AdminContext` and render every option from the response, so
+        the list a form offers and the list the API accepts cannot diverge.
+        The hardcoded speciality-id fallbacks are gone too — including the
+        `|| '7'` default behind the 0.6 speciality-reset regression. Validation
+        is unchanged and remains the enforcement layer.* *Found during 0.6.*
+      - **Shared doctor phone number — STILL DEFERRED.** All 16 seeded doctors
+        share `+962 79 000 0000` (`seed.js`). Cosmetic but visible in the live
+        demo — give each a distinct placeholder or consciously accept it. Left
+        open deliberately; it blocks nothing, and the seed data already
+        declares itself as demo data. *Found during 0.5.*
       - *Local `.env` setup was considered for this list and **dropped**: all
         four `.env.example` files exist, README step 2 tells you to copy each
         one, and `ALLOWED_ORIGINS` and `VITE_BACKEND_URL` are documented in
