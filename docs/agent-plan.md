@@ -22,24 +22,34 @@ Which migrations have been applied to the **Aiven production database**. Local
 and production are migrated separately — `npm run migrate` from a dev machine
 hits whatever `backend/.env` points at, which is normally local MySQL.
 
-- **001_doctors_profile_fields.sql — APPLIED.** `experience_years`, `languages`
-  and `gender` exist on `doctors`, and the backfill has converted the
-  `experience` strings to integers on all 16 rows. **Do not re-run 001 against
-  Aiven** — the ledger row is written, and the ALTER would fail on duplicate
-  columns anyway. Applied early, alone, as a canary for the runner against a
-  managed host.
-- **002, 003 and 004 — NOT APPLIED.** The pending Aiven batch is all three:
-  - `002_speciality_keywords.sql` — keyword table + 55 routing terms
-  - `003_assistant_tables.sql` — `assistant_audit_log`, `conversations`
-  - `004_doctors_area.sql` — `doctors.area` + `idx_area`
+**All four Phase 0 migrations are applied** (as of 2026-08-16). The
+`schema_migrations` ledger on Aiven holds all four rows, so re-running the
+runner there is a no-op — and **do not re-apply any of them by hand**: the
+`ALTER`/`CREATE` statements would fail on duplicate columns and tables.
 
-  They go up **together at the Phase 0 boundary**, after a fresh `mysqldump`,
-  with `DB_SSL=true` set. Note that 004 adds `area` without a backfill, so
-  production doctors keep `area = NULL` until someone fills them in through the
-  admin forms — the seed script never runs there.
+- **001_doctors_profile_fields.sql** — `experience_years`, `languages` and
+  `gender` on `doctors`; the backfill converted the `experience` strings to
+  integers. Applied early and alone, as a canary for the runner against a
+  managed host.
+- **002_speciality_keywords.sql** — `speciality_keywords` table, **populated**
+  with the routing terms.
+- **003_assistant_tables.sql** — `assistant_audit_log` and `conversations`
+  exist and are **empty**, awaiting the tool layer in Phase 1 and the chat
+  endpoint in 2.7.
+- **004_doctors_area.sql** — `doctors.area` and `idx_area` exist, but **`area`
+  is NULL on every production row**. 004 ships without a backfill, and the seed
+  script — the only thing that populates `area`, `languages` and `gender` —
+  never runs against production. Those get filled in through the 0.6 admin
+  forms, one doctor at a time.
+
+  Until that happens, 1.2's area, language and gender filters match nothing on
+  production while working fine locally. Read a NULL as "unknown", never as "no
+  match".
 
 `npm run seed` must never run against Aiven — it opens with `DELETE FROM` on all
-four tables.
+four tables. Since 0.7 this is enforced rather than trusted: `database/seed.js`
+refuses to run unless `DB_HOST` is `localhost` or `127.0.0.1`, aborting before
+it opens a connection.
 
 ---
 
