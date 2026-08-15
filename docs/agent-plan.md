@@ -96,6 +96,25 @@ Close the schema gaps so nothing later needs a workaround.
       readiness check that returns 503 until the pool is up — keeping the
       existing retry/backoff from commit `950f5e3`. Worst on a cold Render
       boot. *Found during 0.1.*
+- [ ] **0.8** Deferred cleanup (tracking only — **not blocking Phase 0**):
+      - **Hardcoded form option data.** The admin add/edit doctor forms
+        hardcode dropdown options — speciality IDs 7–12, plus the
+        district/gender/language lists — in the JSX, mirrored by enforcement
+        constants in the backend (`constants/doctorOptions.js`). Adding e.g. a
+        district means editing three places, and a mismatch means the form
+        offers a value the API rejects with 400. Same fragility migration 002
+        avoided by joining on `specialities.name`. Consider serving these
+        option lists from an endpoint so there is one source of truth.
+        *Found during 0.6.*
+      - **Shared doctor phone number.** All 16 seeded doctors share
+        `+962 79 000 0000` (`seed.js`). Cosmetic but visible in the live demo —
+        give each a distinct placeholder or consciously accept it.
+        *Found during 0.5.*
+      - *Local `.env` setup was considered for this list and **dropped**: all
+        four `.env.example` files exist, README step 2 tells you to copy each
+        one, and `ALLOWED_ORIGINS` and `VITE_BACKEND_URL` are documented in
+        both the README tables and the example files. The login failure during
+        0.6 came from skipping that documented step, not from a gap in it.*
 
 **Done when:** a fresh `docker compose up` + seed produces doctors with numeric
 experience, languages, gender, and real Amman addresses.
