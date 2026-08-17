@@ -14,7 +14,9 @@
 // tool must satisfy.
 
 import searchDoctors from './searchDoctors.js';
+import getDoctor from './getDoctor.js';
+import listSpecialities from './listSpecialities.js';
 
-export const tools = [searchDoctors];
+export const tools = [searchDoctors, getDoctor, listSpecialities];
 
 export const getTool = (name) => tools.find((tool) => tool.name === name);

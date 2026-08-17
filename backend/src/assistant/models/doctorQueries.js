@@ -79,3 +79,27 @@ ${DOCTOR_LIST_COLUMNS}
 
   return doctors;
 };
+
+// Deliberately not filtered on `available`: asking about a specific doctor
+// should say they exist but aren't taking appointments, rather than pretending
+// they don't exist. `available` is returned so the caller can say which.
+//
+// `about` is included here and nowhere else — it is free text an admin
+// controls, so every caller must truncate and label it (rule 5).
+export const getDoctorById = async (doctorId) => {
+  const db = getDB();
+
+  const [doctors] = await db.query(
+    `SELECT
+${DOCTOR_LIST_COLUMNS},
+      d.about,
+      d.available
+     FROM doctors d
+     JOIN specialities s ON d.speciality_id = s.id
+     WHERE d.id = ?
+     LIMIT 1`,
+    [doctorId],
+  );
+
+  return doctors[0];
+};

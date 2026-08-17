@@ -8,15 +8,7 @@ import {
   DOCTOR_AREAS,
   DOCTOR_GENDERS,
 } from '../../constants/doctorOptions.js';
-
-// Built server-side, never by the model: a URL the model composed could point
-// anywhere. Returns null when a doctor has no address on file.
-const buildMapsUrl = (addressLine1, addressLine2) => {
-  const address = [addressLine1, addressLine2].filter(Boolean).join(', ');
-  if (!address) return null;
-
-  return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(address)}`;
-};
+import { buildMapsUrl } from './mapsUrl.js';
 
 // `.strict()` matters for rule 3: an unknown key — say a hallucinated
 // `user_id` — fails the parse loudly instead of riding along unnoticed in

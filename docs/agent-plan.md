@@ -176,7 +176,17 @@ bugs are isolated to the AI layer.
       `user_id` fails the parse rather than riding along in `args`; language,
       gender and area reuse the 0.8 constants as closed vocabularies. Results
       capped at 20, ordered experience DESC.*
-- [ ] **1.3** `tools/getDoctor.js` and `tools/listSpecialities.js` + schemas.
+- [x] **1.3** `tools/getDoctor.js` and `tools/listSpecialities.js` + schemas.
+      *`get_doctor` deliberately does **not** filter on `available` — asking
+      about a named doctor should say they exist but aren't taking
+      appointments, rather than pretending they don't exist; `search_doctors`
+      still hides them. `doctor_id` is not an identity key: it names another
+      party, not the caller. `about` is truncated to 500 chars and returned as
+      `{ text, truncated, source }` **inline**, so the tool carries rule 5 from
+      the moment it exists — 1.7 replaces that block and extends the same
+      treatment to the other admin-controlled fields. `maps_url` moved to a
+      shared `tools/mapsUrl.js`; 1.2's output verified byte-identical after the
+      extraction.*
 - [ ] **1.4** `tools/checkAvailability.js` + schema. Single date or range up to
       7 days. Returns per-date `available` boolean, free-slot count, and
       `checked_at`. Calls the existing `appointmentService`.
@@ -186,6 +196,15 @@ bugs are isolated to the AI layer.
       Includes doctor name, date, time, address, `maps_url`, fee.
 - [ ] **1.7** `guardrails/sanitize.js` — truncate free-text fields, strip
       blocklisted keys. `auditLog.js` — write to `assistant_audit_log`.
+      - ***Scope: every admin-controlled free-text field in a tool result, not
+        just `about`.** 1.3 sanitises `about` inline and defers the rest. The
+        same admin who can write an injection payload into `about` can write
+        one into `name`, `degree`, `address_line1`, `address_line2` or `area` —
+        all of which `get_doctor` returns raw today, and the first four of
+        which `search_doctors` returns too. `sanitize.js` must truncate and
+        label all of them, so no raw admin-controlled string reaches a tool
+        result unlabelled, and the inline block in `getDoctor.js` is replaced
+        by the shared helper.*
 - [ ] **1.8** Guardrail tests. These must fail loudly if a rule is broken:
       - no registered tool's schema contains an identity key
       - no tool result object contains `password`, `email`,
