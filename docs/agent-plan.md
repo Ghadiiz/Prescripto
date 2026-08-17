@@ -154,9 +154,17 @@ Every tool as ordinary tested code, before any model is involved. This is the
 phase that makes the project tractable — if the tools are proven correct, later
 bugs are isolated to the AI layer.
 
-- [ ] **1.1** Scaffold `backend/src/assistant/` per the structure in
+- [x] **1.1** Scaffold `backend/src/assistant/` per the structure in
       `CLAUDE.md`. Add `zod`. Write the `ctx`/`args` contract as a comment
-      block in `tools/README.md`.
+      block in `tools/README.md`. *`zod@4` (not v3 — schema syntax in 1.2+ must
+      match). `tools/index.js` is the **patient** registry: an empty `tools`
+      array plus `getTool(name)`, which 1.8 iterates, 2.2 turns into tool
+      definitions and 4.3 exposes over MCP. Each tool default-exports
+      `{ name, description, schema, mutates, handler }` with `handler` keeping
+      the `(ctx, args)` signature; `mutates` is declared per tool so 1.8's "no
+      write tool" test has something to assert on. Schemas live in the tool
+      file, not a separate directory. `guardrails/` is deliberately not created
+      yet — 1.7 creates it with its first real file.*
 - [ ] **1.2** `tools/searchDoctors.js` + zod schema. Filters: speciality,
       min_experience_years, max_fees, language, gender, area. Explicit column
       list. Returns a `maps_url` built server-side.
