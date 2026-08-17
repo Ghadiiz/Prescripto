@@ -165,9 +165,17 @@ bugs are isolated to the AI layer.
       write tool" test has something to assert on. Schemas live in the tool
       file, not a separate directory. `guardrails/` is deliberately not created
       yet — 1.7 creates it with its first real file.*
-- [ ] **1.2** `tools/searchDoctors.js` + zod schema. Filters: speciality,
+- [x] **1.2** `tools/searchDoctors.js` + zod schema. Filters: speciality,
       min_experience_years, max_fees, language, gender, area. Explicit column
-      list. Returns a `maps_url` built server-side.
+      list. Returns a `maps_url` built server-side. *SQL lives in the new
+      `assistant/models/doctorQueries.js` layer, not the tool file — those
+      queries carry the explicit column list that keeps `password`, `email` and
+      the token columns out of every result. `about` is excluded from search
+      results too, so no unsanitised free text reaches them; 1.3's `getDoctor`
+      is where that problem lands. Schema is `.strict()`, so a hallucinated
+      `user_id` fails the parse rather than riding along in `args`; language,
+      gender and area reuse the 0.8 constants as closed vocabularies. Results
+      capped at 20, ordered experience DESC.*
 - [ ] **1.3** `tools/getDoctor.js` and `tools/listSpecialities.js` + schemas.
 - [ ] **1.4** `tools/checkAvailability.js` + schema. Single date or range up to
       7 days. Returns per-date `available` boolean, free-slot count, and

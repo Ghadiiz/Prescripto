@@ -47,6 +47,12 @@ export default {
 
 Tool **names** are snake_case; **files** are camelCase (`searchDoctors.js`).
 
+**SQL lives in `../models/`**, not in the tool file — see
+`models/doctorQueries.js`. Those queries carry the explicit column list that
+keeps `password`, `email` and the token columns out of every result; the tool
+file holds the schema, the description and the handler that shapes what the
+model sees.
+
 ## The rules every tool must satisfy
 
 1. **Call the service layer directly.** Never make an HTTP request from a tool

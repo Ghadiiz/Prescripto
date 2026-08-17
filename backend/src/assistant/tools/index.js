@@ -13,6 +13,8 @@
 // See README.md in this directory for the descriptor shape and the rules each
 // tool must satisfy.
 
-export const tools = [];
+import searchDoctors from './searchDoctors.js';
+
+export const tools = [searchDoctors];
 
 export const getTool = (name) => tools.find((tool) => tool.name === name);
