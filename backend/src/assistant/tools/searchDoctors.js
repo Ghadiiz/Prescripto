@@ -9,6 +9,7 @@ import {
   DOCTOR_GENDERS,
 } from '../../constants/doctorOptions.js';
 import { buildMapsUrl } from './mapsUrl.js';
+import { sanitizeAdminText } from '../guardrails/sanitize.js';
 
 // `.strict()` matters for rule 3: an unknown key — say a hallucinated
 // `user_id` — fails the parse loudly instead of riding along unnoticed in
@@ -44,7 +45,7 @@ export default {
     const doctors = await searchDoctors(args);
 
     return doctors.map((doctor) => ({
-      ...doctor,
+      ...sanitizeAdminText(doctor),
       fees: Number(doctor.fees),
       maps_url: buildMapsUrl(doctor.address_line1, doctor.address_line2),
     }));

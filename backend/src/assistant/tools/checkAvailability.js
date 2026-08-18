@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import * as appointmentService from '../../appointments/services/appointmentService.js';
 import { getDoctorById } from '../models/doctorQueries.js';
+import { sanitizeAdminText } from '../guardrails/sanitize.js';
 
 const MAX_DAYS = 7;
 
@@ -63,13 +64,13 @@ export default {
     const checkedAt = new Date().toISOString();
 
     if (!doctor.available) {
-      return {
+      return sanitizeAdminText({
         doctor_id: doctorId,
         doctor_name: doctor.name,
         accepting_appointments: false,
         checked_at: checkedAt,
         dates: [],
-      };
+      });
     }
 
     const dates = [];
@@ -112,12 +113,12 @@ export default {
       }
     }
 
-    return {
+    return sanitizeAdminText({
       doctor_id: doctorId,
       doctor_name: doctor.name,
       accepting_appointments: true,
       checked_at: checkedAt,
       dates,
-    };
+    });
   },
 };

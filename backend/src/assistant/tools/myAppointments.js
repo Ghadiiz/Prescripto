@@ -4,6 +4,7 @@ import {
   APPOINTMENT_RESULT_LIMIT,
 } from '../models/appointmentQueries.js';
 import { buildMapsUrl } from './mapsUrl.js';
+import { sanitizeAdminText } from '../guardrails/sanitize.js';
 
 // MySQL returns DATE as a Date object and TIME as 'HH:MM:SS'. The model gets
 // an ISO date it can reason about and a plain HH:MM, not a display string.
@@ -56,23 +57,25 @@ export default {
       status: args.status ?? 'upcoming',
     });
 
-    return rows.map((row) => ({
-      id: row.id,
-      doctor_id: row.doctor_id,
-      doctor_name: row.doctor_name,
-      speciality: row.speciality,
-      date: toIsoDate(row.appointment_date),
-      time: toShortTime(row.appointment_time),
-      status: row.status,
-      is_past: Boolean(row.is_past),
-      fee: Number(row.amount),
-      address_line1: row.address_line1,
-      address_line2: row.address_line2,
-      area: row.area,
-      maps_url: buildMapsUrl(row.address_line1, row.address_line2),
-      ...(row.cancellation_reason
-        ? { cancellation_reason: row.cancellation_reason }
-        : {}),
-    }));
+    return rows.map((row) =>
+      sanitizeAdminText({
+        id: row.id,
+        doctor_id: row.doctor_id,
+        doctor_name: row.doctor_name,
+        speciality: row.speciality,
+        date: toIsoDate(row.appointment_date),
+        time: toShortTime(row.appointment_time),
+        status: row.status,
+        is_past: Boolean(row.is_past),
+        fee: Number(row.amount),
+        address_line1: row.address_line1,
+        address_line2: row.address_line2,
+        area: row.area,
+        maps_url: buildMapsUrl(row.address_line1, row.address_line2),
+        ...(row.cancellation_reason
+          ? { cancellation_reason: row.cancellation_reason }
+          : {}),
+      }),
+    );
   },
 };
