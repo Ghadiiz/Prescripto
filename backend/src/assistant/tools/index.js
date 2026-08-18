@@ -16,7 +16,13 @@
 import searchDoctors from './searchDoctors.js';
 import getDoctor from './getDoctor.js';
 import listSpecialities from './listSpecialities.js';
+import checkAvailability from './checkAvailability.js';
 
-export const tools = [searchDoctors, getDoctor, listSpecialities];
+export const tools = [
+  searchDoctors,
+  getDoctor,
+  listSpecialities,
+  checkAvailability,
+];
 
 export const getTool = (name) => tools.find((tool) => tool.name === name);

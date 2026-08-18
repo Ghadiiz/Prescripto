@@ -53,6 +53,23 @@ it opens a connection.
 
 ---
 
+## Known issues (tracked, not scheduled)
+
+Pre-existing app bugs found while building something else. Logged so they are
+not lost; none blocks the current phase.
+
+- **`GET /api/appointments/available-slots` reports past dates as free.**
+  `getAvailableSlots` only special-cases *today* — for any earlier date
+  `isToday` is false, so it generates the full 10:00–21:00 grid minus bookings
+  and returns a whole day of slots for e.g. last week. The HTTP controller does
+  not guard it either. **Low priority:** booking a past slot fails other checks,
+  and the patient UI only offers the next 7 days, so it is reachable by direct
+  API call rather than through the app. The `check_availability` tool guards
+  against it independently (`reason: 'date_in_past'`), so the assistant is not
+  affected. *Found during 1.4.*
+
+---
+
 ## Phase 0 — Database and seed data
 
 Close the schema gaps so nothing later needs a workaround.
@@ -187,7 +204,7 @@ bugs are isolated to the AI layer.
       treatment to the other admin-controlled fields. `maps_url` moved to a
       shared `tools/mapsUrl.js`; 1.2's output verified byte-identical after the
       extraction.*
-- [ ] **1.4** `tools/checkAvailability.js` + schema. Single date or range up to
+- [x] **1.4** `tools/checkAvailability.js` + schema. Single date or range up to
       7 days. Returns per-date `available` boolean, free-slot count, and
       `checked_at`. Calls the existing `appointmentService`.
 - [ ] **1.5** `tools/suggestSpeciality.js` + schema. Pure lookup against
