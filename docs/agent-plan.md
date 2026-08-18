@@ -207,8 +207,23 @@ bugs are isolated to the AI layer.
 - [x] **1.4** `tools/checkAvailability.js` + schema. Single date or range up to
       7 days. Returns per-date `available` boolean, free-slot count, and
       `checked_at`. Calls the existing `appointmentService`.
-- [ ] **1.5** `tools/suggestSpeciality.js` + schema. Pure lookup against
+- [x] **1.5** `tools/suggestSpeciality.js` + schema. Pure lookup against
       `speciality_keywords`. No match → return all specialities, never guess.
+      *Matching is exact-term plus whole-word phrase containment, done in JS
+      against the 55-row table: `my back pain is bad` matches `back pain`,
+      while `gutter`, `coldplay` and `molecular` match nothing. Boundaries are
+      checked against a token list, not a regex built from table data.*
+      - ***Deviation from the plan:** implemented as **return all matching
+        keywords**, not longest-wins. `stomach ache` reports both
+        `stomach ache` and `stomach`. More candidates suits the never-guess
+        contract better than silently discarding a match, and all three
+        overlapping pairs in the table currently share a speciality, so it
+        cannot produce a wrong route today. 1.8 adds a test that keeps that
+        true.*
+      - *No match returns all six specialities with a note instructing the
+        model to ask rather than choose — without it, a model handed six
+        options picks one anyway. Emergency phrasings deliberately match
+        nothing here; 2.4 owns those.*
 - [ ] **1.6** `tools/myAppointments.js` + schema. Patient from `ctx` only.
       Includes doctor name, date, time, address, `maps_url`, fee.
 - [ ] **1.7** `guardrails/sanitize.js` — truncate free-text fields, strip
@@ -229,6 +244,14 @@ bugs are isolated to the AI layer.
       - the tool registry contains no write tool
       - a doctor seeded with instruction-like text in `about` returns it
         truncated and labelled
+      - **no overlapping keyword pair in `speciality_keywords` disagrees.** For
+        any two keywords where one contains the other as a whole phrase
+        (`stomach ache` / `stomach`, `hair loss` / `hair`, `general checkup` /
+        `checkup`), both must map to the same speciality. 1.5 returns **all**
+        matching keywords rather than letting the longest win, so a future pair
+        whose shorter form points elsewhere would make `suggest_speciality`
+        offer a less-specific wrong route alongside the right one. All three
+        current pairs agree; this test keeps it that way.
 
 **Done when:** every tool passes its tests. No AI code written yet.
 
