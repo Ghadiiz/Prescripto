@@ -18,6 +18,7 @@ import getDoctor from './getDoctor.js';
 import listSpecialities from './listSpecialities.js';
 import checkAvailability from './checkAvailability.js';
 import suggestSpeciality from './suggestSpeciality.js';
+import myAppointments from './myAppointments.js';
 
 export const tools = [
   searchDoctors,
@@ -25,6 +26,7 @@ export const tools = [
   listSpecialities,
   checkAvailability,
   suggestSpeciality,
+  myAppointments,
 ];
 
 export const getTool = (name) => tools.find((tool) => tool.name === name);

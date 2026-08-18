@@ -224,7 +224,7 @@ bugs are isolated to the AI layer.
         model to ask rather than choose — without it, a model handed six
         options picks one anyway. Emergency phrasings deliberately match
         nothing here; 2.4 owns those.*
-- [ ] **1.6** `tools/myAppointments.js` + schema. Patient from `ctx` only.
+- [x] **1.6** `tools/myAppointments.js` + schema. Patient from `ctx` only.
       Includes doctor name, date, time, address, `maps_url`, fee.
 - [ ] **1.7** `guardrails/sanitize.js` — truncate free-text fields, strip
       blocklisted keys. `auditLog.js` — write to `assistant_audit_log`.
