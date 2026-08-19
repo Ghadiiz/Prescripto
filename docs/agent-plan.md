@@ -22,19 +22,16 @@ Which migrations have been applied to the **Aiven production database**. Local
 and production are migrated separately — `npm run migrate` from a dev machine
 hits whatever `backend/.env` points at, which is normally local MySQL.
 
-**All four Phase 0 migrations are applied** (as of 2026-08-16). The
-`schema_migrations` ledger on Aiven holds all four rows, so re-running the
-runner there is a no-op — and **do not re-apply any of them by hand**: the
-`ALTER`/`CREATE` statements would fail on duplicate columns and tables.
+**All five migrations are applied** — 001–004 on 2026-08-16, 005 on
+2026-08-19. The `schema_migrations` ledger on Aiven holds all five rows, so
+re-running the runner there is a no-op — and **do not re-apply any of them by
+hand**: the `ALTER`/`CREATE` statements would fail on duplicate columns, tables
+and keys.
 
 - **001_doctors_profile_fields.sql** — `experience_years`, `languages` and
   `gender` on `doctors`; the backfill converted the `experience` strings to
   integers. Applied early and alone, as a canary for the runner against a
   managed host.
-- **005_conversations_unique_user_role.sql — NOT APPLIED.** Adds a unique key
-  on `conversations (user_id, role)`. Conversation storage upserts against it;
-  without it every save inserts a new row and history fragments silently. Goes
-  up with the next Aiven batch. *Added during 2.6.*
 - **002_speciality_keywords.sql** — `speciality_keywords` table, **populated**
   with the routing terms.
 - **003_assistant_tables.sql** — `assistant_audit_log` and `conversations`
@@ -49,6 +46,15 @@ runner there is a no-op — and **do not re-apply any of them by hand**: the
   Until that happens, 1.2's area, language and gender filters match nothing on
   production while working fine locally. Read a NULL as "unknown", never as "no
   match".
+- **005_conversations_unique_user_role.sql** — `uniq_user_role (user_id, role)`
+  exists on `conversations`, verified with `SHOW INDEXES` (`Non_unique = 0`).
+  Applied 2026-08-19 after a fresh backup and a duplicate pre-check; the table
+  was empty, so the unique key had nothing to reject. Without it the
+  conversation upsert has nothing to match and history fragments silently.
+
+  `conversations` on Aiven is **empty and stays empty until 2.7's endpoint
+  writes to it** — as is `assistant_audit_log`, since nothing calls `runTool`
+  in production yet.
 
 `npm run seed` must never run against Aiven — it opens with `DELETE FROM` on all
 four tables. Since 0.7 this is enforced rather than trusted: `database/seed.js`
