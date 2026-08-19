@@ -271,7 +271,7 @@ bugs are isolated to the AI layer.
         label all of them, so no raw admin-controlled string reaches a tool
         result unlabelled, and the inline block in `getDoctor.js` is replaced
         by the shared helper.*
-- [ ] **1.8** Guardrail tests. These must fail loudly if a rule is broken:
+- [x] **1.8** Guardrail tests. These must fail loudly if a rule is broken:
       - no registered tool's schema contains an identity key
       - no tool result object contains `password`, `email`,
         `verification_token`, `reset_password_token`
@@ -286,8 +286,21 @@ bugs are isolated to the AI layer.
         whose shorter form points elsewhere would make `suggest_speciality`
         offer a less-specific wrong route alongside the right one. All three
         current pairs agree; this test keeps it that way.
+      - *Runner is **`node:test`** (Node 22 built-in) — no dependency added.
+        `npm test` is bare `node --test`: `node --test tests/` makes Node
+        resolve the directory as a module and throw MODULE_NOT_FOUND.*
+      - *The suite **requires a running MySQL** and is **localhost-guarded**
+        like `seed.js` — it INSERTs and DELETEs doctors, users and
+        appointments, including a doctor carrying injection payloads, so it
+        refuses any non-local `DB_HOST` before `connectDB()` is called.
+        6.4 will need a MySQL service container.*
+      - *Each assertion was **mutation-tested**: the guardrail was broken one
+        at a time and the matching test confirmed to fail, then reverted. A
+        guardrail test that cannot fail is worse than no test.*
 
-**Done when:** every tool passes its tests. No AI code written yet.
+**Done when:** every tool passes its tests. No AI code written yet. — **DONE.**
+Six tools, two guardrails, `runTool` as the single audited entry point, and an
+8-test suite that fails when a rule is broken.
 
 ---
 
