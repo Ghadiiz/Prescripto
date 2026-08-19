@@ -306,8 +306,22 @@ Six tools, two guardrails, `runTool` as the single audited entry point, and an
 
 ## Phase 2 — Agent loop and chat endpoint
 
-- [ ] **2.1** `agentService.js` — provider client (Gemini), exponential backoff
-      with jitter on 429. Nothing else knows the provider.
+- [x] **2.1** `agentService.js` — provider client (Gemini), exponential backoff
+      with jitter on 429. Nothing else knows the provider. *No SDK: plain
+      `fetch` (Node 22), so the retry behaviour is ours rather than an SDK's.
+      Exposes one `generate({ system, messages, tools, signal })` returning
+      `{ text, toolCalls, finishReason, usage }` — verified live that no Gemini
+      vocabulary (`candidates`, `parts`, `functionCall`) crosses the boundary.*
+      - ***Model id had to be verified, not assumed.** `ListModels` still
+        advertises `gemini-2.5-flash`, but `generateContent` rejects it with
+        "no longer available to new users" and points at `gemini-3.6-flash`,
+        which is now the pinned default. A catalogued model is not necessarily
+        a usable one — probe before pinning.*
+      - *Retries 429 and 5xx only; 4xx fails fast. Full jitter, `Retry-After`
+        honoured and capped at 10s, `AbortSignal` passed through. The key is
+        sent as an `x-goog-api-key` header (never a URL parameter) and is
+        asserted absent from thrown messages and error objects even when the
+        provider echoes it back.*
 - [ ] **2.2** The tool-use loop: send message + history + tool definitions,
       handle tool-call responses, validate args against zod, execute, feed
       results back. Hard cap on iterations (start at 5).

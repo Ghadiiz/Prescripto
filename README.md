@@ -134,6 +134,8 @@ Full templates are in each app's `.env.example`. Summary:
 | `RESEND_API_KEY`, `EMAIL_FROM` | Email sending (optional) |
 | `FRONTEND_URL`, `ADMIN_PANEL_URL` | Used to build links in emails |
 | `ALLOWED_ORIGINS` | Comma-separated CORS allowlist |
+| `GEMINI_API_KEY` | Google Gemini key for the AI assistant |
+| `GEMINI_MODEL` | Gemini model id (default `gemini-3.6-flash`) |
 
 **frontend/.env** and **admin/.env**
 
