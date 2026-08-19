@@ -31,6 +31,10 @@ runner there is a no-op — and **do not re-apply any of them by hand**: the
   `gender` on `doctors`; the backfill converted the `experience` strings to
   integers. Applied early and alone, as a canary for the runner against a
   managed host.
+- **005_conversations_unique_user_role.sql — NOT APPLIED.** Adds a unique key
+  on `conversations (user_id, role)`. Conversation storage upserts against it;
+  without it every save inserts a new row and history fragments silently. Goes
+  up with the next Aiven batch. *Added during 2.6.*
 - **002_speciality_keywords.sql** — `speciality_keywords` table, **populated**
   with the routing terms.
 - **003_assistant_tables.sql** — `assistant_audit_log` and `conversations`
@@ -431,8 +435,28 @@ Six tools, two guardrails, `runTool` as the single audited entry point, and an
         left the self-harm ordering test passing, because its message never
         tripped the scope gate. It now uses a message that trips both and
         asserts that premise inline, so it cannot rot.*
-- [ ] **2.6** Conversation storage: last 10 turns from the `conversations`
-      table, 30-day retention.
+- [x] **2.6** Conversation storage: last 10 turns from the `conversations`
+      table, 30-day retention. *A turn is one user message plus the
+      assistant’s final text reply, so 10 turns is at most 20 stored
+      messages. History is one continuous conversation per (user_id, role),
+      trimmed — the table has no session_id, deliberately, per 0.4.*
+      - ***Only human-readable text is stored.** Never the tool-call requests,
+        tool results, or providerRef/thoughtSignature plumbing. Beyond size and
+        provider-neutrality, replaying a stored tool result would feed back
+        **stale availability** — "22 slots free" captured last week,
+        presented as current — which is exactly what rule 7 forbids. Not
+        storing it makes that structurally impossible.*
+      - ***Every query scopes on user_id AND role**, mutation-proven: removing
+        `AND role = ?` fails the test. Patient and doctor id spaces overlap,
+        so user_id alone would let patient #5 read doctor #5’s history.*
+      - ***Migration 005 was required.** 003’s `idx_user` is non-unique, so
+        the upsert had nothing to match — every save would insert a new row
+        and history would fragment silently. **Pending for Aiven.***
+      - *Retention sweeps on save (no scheduler), and `purgeExpiredConversations`
+        is exported for 6.2’s worker. Conversations expire; **audit rows do
+        not** — tested both ways.*
+      - *Verified live: text-only replay does not trip the thoughtSignature
+        requirement, and the model still resolved "the one in Khalda" from it.*
 - [ ] **2.7** `POST /api/assistant/chat` — auth middleware (login-only),
       rate limit (20/user/hour), SSE streaming response.
 - [ ] **2.8** Eval file: ~20 test conversations including the adversarial ones —
