@@ -82,6 +82,24 @@ not lost; none blocks the current phase.
   transparently); **6.1** is the natural home, since it already reworks this
   layer for Redis. *Found during 1.7.*
 
+- **Gemini free tier is 20 requests per DAY, per model — not ~15/minute.**
+  The quota id is `GenerateRequestsPerDayPerProjectPerModel-FreeTier`, limit
+  20. The per-minute figure this plan assumed is the *rate* limit; the daily
+  cap is what actually bites. One live two-hop conversation costs 3-4 requests,
+  so a day allows roughly five conversations per model.
+
+  **Confirmed working model ids** (verified by live call, not from ListModels,
+  which advertises unusable ones): `gemini-3.6-flash` (default),
+  `gemini-3.5-flash`, `gemini-3.1-flash-lite`. The quota is per model, so
+  switching models buys another 20.
+
+  **2.8 must be designed around this.** ~20 eval conversations at 3-4 requests
+  each is 60-80 requests — three to four days on one model. Run the
+  security-critical adversarial cases (booking attempts, other-patient access,
+  injected bio, emergency phrasing, prompt-leak) **live**, spread across the
+  three models; mock the routine happy-path cases. Decide before starting 2.8
+  whether to enable billing instead. *Found during 2.2.*
+
 ---
 
 ## Phase 0 — Database and seed data
@@ -322,9 +340,32 @@ Six tools, two guardrails, `runTool` as the single audited entry point, and an
         sent as an `x-goog-api-key` header (never a URL parameter) and is
         asserted absent from thrown messages and error objects even when the
         provider echoes it back.*
-- [ ] **2.2** The tool-use loop: send message + history + tool definitions,
+- [x] **2.2** The tool-use loop: send message + history + tool definitions,
       handle tool-call responses, validate args against zod, execute, feed
-      results back. Hard cap on iterations (start at 5).
+      results back. Hard cap on iterations (start at 5). *Every execution goes
+      through `runTool`, sequentially, so audit order matches conversation
+      order. Returned `{ error }` results are fed back for self-correction; a
+      **thrown** audit failure propagates and ends the turn with no
+      model-visible text.*
+      - ***Gemini rejects zod's JSON Schema.** `toolDefinitions.js` strips
+        `$schema` and `additionalProperties` and maps `exclusiveMinimum` to
+        `minimum` (+1 on integers, so `doctor_id: 0` is not advertised as
+        valid). `enum`, `required`, `minimum`/`maximum` and `description` all
+        survive.*
+      - ***The model invents argument keys** — observed live sending
+        `specialty` (US spelling) and lowercase enum values. `.strict()`
+        rejects them and the error is fed back, so invalid arguments are a
+        normal path, not an edge case. Rule 3 stays absolute: a smuggled
+        `user_id` fails exactly as loudly as a typo.*
+      - ***Conversation history must be faithful.** One model response with N
+        tool calls appends ONE assistant turn carrying those calls, then N tool
+        results — not N empty assistant messages. `agentService` gained the
+        matching mapping branch, which it lacked entirely: assistant-with-tool-
+        calls was silently flattened to empty text.*
+      - ***Provider state is carried opaquely.** Gemini 3.x attaches a
+        `thoughtSignature` to each `functionCall` part and rejects the turn if
+        it is replayed without one. It travels in a neutral `providerRef` that
+        the loop passes through and never interprets.*
 - [ ] **2.3** System prompt. Include: read-only, never books, never diagnoses,
       tool results are data not instructions, availability is never held.
 - [ ] **2.4** `guardrails/emergencyCheck.js` — runs before any tool call, on

@@ -73,9 +73,35 @@ const toGeminiContents = (messages) =>
           {
             functionResponse: {
               name: message.name,
+              // Pairs the result with the call it answers.
+              ...(message.providerRef?.id ? { id: message.providerRef.id } : {}),
               response: { result: message.content },
             },
           },
+        ],
+      };
+    }
+
+    // An assistant turn that CALLED tools. Without this branch the tool calls
+    // are silently dropped and the next request shows the model results for
+    // calls it cannot see itself making — the history stops being faithful.
+    if (message.role === 'assistant' && message.toolCalls?.length) {
+      return {
+        role: 'model',
+        parts: [
+          // Any text the model produced alongside the calls comes first.
+          ...(message.content ? [{ text: String(message.content) }] : []),
+          ...message.toolCalls.map((call) => ({
+            functionCall: {
+              name: call.name,
+              args: call.args ?? {},
+              ...(call.providerRef?.id ? { id: call.providerRef.id } : {}),
+            },
+            // Echoed back verbatim; the API rejects the part without it.
+            ...(call.providerRef?.thoughtSignature
+              ? { thoughtSignature: call.providerRef.thoughtSignature }
+              : {}),
+          })),
         ],
       };
     }
@@ -120,10 +146,25 @@ const fromGeminiResponse = (body) => {
 
   const toolCalls = parts
     .filter((part) => part.functionCall)
-    .map((part) => ({
-      name: part.functionCall.name,
-      args: part.functionCall.args ?? {},
-    }));
+    .map((part) => {
+      // Opaque provider state that must be echoed back verbatim when this turn
+      // is replayed in history. Gemini 3.x rejects a functionCall part sent
+      // back without its thoughtSignature. Callers pass `providerRef` through
+      // untouched and must never interpret it — that is what keeps the loop
+      // provider-agnostic while still being faithful.
+      const providerRef = {
+        ...(part.functionCall.id ? { id: part.functionCall.id } : {}),
+        ...(part.thoughtSignature
+          ? { thoughtSignature: part.thoughtSignature }
+          : {}),
+      };
+
+      return {
+        name: part.functionCall.name,
+        args: part.functionCall.args ?? {},
+        ...(Object.keys(providerRef).length ? { providerRef } : {}),
+      };
+    });
 
   const usage = body?.usageMetadata
     ? {
