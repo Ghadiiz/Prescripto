@@ -385,8 +385,29 @@ Six tools, two guardrails, `runTool` as the single audited entry point, and an
       - *Live-verified: declines to book while stating nothing is held,
         declines to diagnose but routes to a speciality, and declines to recite
         its instructions.*
-- [ ] **2.4** `guardrails/emergencyCheck.js` — runs before any tool call, on
+- [x] **2.4** `guardrails/emergencyCheck.js` — runs before any tool call, on
       every message. Trips → fixed non-generated response, loop ends.
+      *Checked at the top of `runConversation` against the latest user
+      message: zero provider calls, zero tool calls, zero audit rows on trip.
+      Verified by stubbing `fetch` to throw if called at all.*
+      - ***Two categories, two responses.** Physical emergencies get 911 plus
+        the nearest emergency department. Self-harm and suicidal ideation get
+        a separate warm, non-counselling message — telling someone in a
+        mental-health crisis to visit A&E reads as a brush-off. If both trip,
+        **self-harm wins**: its response already names 911, so nothing is
+        lost, while the reverse would answer a crisis with the wrong words.*
+      - ***The phrase lists are in code, not the database**, and a test
+        enforces it (no `mysql`, `models/` or `getDB` in either guardrail
+        file). In a table, anyone with admin access could empty it and nothing
+        would look broken.*
+      - ***Recall-favouring, unlike `speciality_keywords`.** There precision
+        matters; here a false negative means a booking assistant answers a
+        crisis, while a false positive costs one turn and every response ends
+        with a way to continue. Every term carries its plausible inflections —
+        including contraction-stripped forms, since `isnt breathing` does not
+        contain the token pair `not breathing`.*
+      - *A test asserts the crisis response contains **no phone number except
+        911**, so nobody can later add an NGO line that goes stale.*
 - [ ] **2.5** `guardrails/scopeCheck.js` — booking-system question vs medical
       advice. Out of scope → polite decline.
 - [ ] **2.6** Conversation storage: last 10 turns from the `conversations`

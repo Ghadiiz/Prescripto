@@ -1,6 +1,7 @@
 import { generate } from './agentService.js';
 import { runTool } from './runTool.js';
 import { buildToolDefinitions } from './toolDefinitions.js';
+import { emergencyCheck } from './guardrails/emergencyCheck.js';
 
 // The tool-use loop. Provider-agnostic: it only knows the normalised shape
 // agentService returns.
@@ -20,6 +21,24 @@ export const runConversation = async ({
   messages = [],
   signal,
 } = {}) => {
+  // Before anything else: no provider call, no tool call, no audit row. A
+  // person describing an emergency must not wait on a model round trip, and
+  // the model must never be the thing deciding how to answer them.
+  const latestUserMessage = [...messages]
+    .reverse()
+    .find((message) => message.role === 'user');
+
+  const emergency = emergencyCheck(latestUserMessage?.content);
+
+  if (emergency.tripped) {
+    return {
+      text: emergency.response,
+      toolCallsMade: 0,
+      iterations: 0,
+      stoppedReason: 'emergency',
+    };
+  }
+
   const toolDefinitions = buildToolDefinitions();
   const conversation = [...messages];
 
