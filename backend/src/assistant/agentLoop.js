@@ -2,6 +2,7 @@ import { generate } from './agentService.js';
 import { runTool } from './runTool.js';
 import { buildToolDefinitions } from './toolDefinitions.js';
 import { emergencyCheck } from './guardrails/emergencyCheck.js';
+import { scopeCheck } from './guardrails/scopeCheck.js';
 
 // The tool-use loop. Provider-agnostic: it only knows the normalised shape
 // agentService returns.
@@ -36,6 +37,20 @@ export const runConversation = async ({
       toolCallsMade: 0,
       iterations: 0,
       stoppedReason: 'emergency',
+    };
+  }
+
+  // Strictly after the emergency check. "I want to kill myself, what should I
+  // do" contains an advice-seeking phrase; it must get the crisis response,
+  // never a booking redirect.
+  const scope = scopeCheck(latestUserMessage?.content);
+
+  if (!scope.inScope) {
+    return {
+      text: scope.response,
+      toolCallsMade: 0,
+      iterations: 0,
+      stoppedReason: 'out_of_scope',
     };
   }
 

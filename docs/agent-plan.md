@@ -408,8 +408,29 @@ Six tools, two guardrails, `runTool` as the single audited entry point, and an
         contain the token pair `not breathing`.*
       - *A test asserts the crisis response contains **no phone number except
         911**, so nobody can later add an NGO line that goes stale.*
-- [ ] **2.5** `guardrails/scopeCheck.js` — booking-system question vs medical
-      advice. Out of scope → polite decline.
+- [x] **2.5** `guardrails/scopeCheck.js` — booking-system question vs medical
+      advice. Out of scope → polite decline. *Runs after `emergencyCheck`,
+      before any provider call. Same fixed-response, code-only, word-boundary
+      design.*
+      - ***Precision-favouring — the inverse of 2.4.** A false positive here
+        refuses a real booking question and breaks the core function, while a
+        false negative just means the model handles it. When in doubt, let it
+        pass.*
+      - ***The gate leans off-topic, not medical.** 2.3’s prompt already
+        refuses to diagnose (verified live), and the no-write architecture
+        means it cannot prescribe regardless — so the medical list is thin
+        jailbreak insurance only. Off-topic is where the gate earns its place:
+        the model *can* answer "who won the world cup" and would spend one of
+        20 daily requests doing it.*
+      - ***Every entry is a multi-word intent phrase, enforced by a test.** A
+        bare `weather` or `write` would reject "a doctor near the weather
+        station" and "write down which doctors treat skin problems", both real
+        booking questions. `capital of`, `is it serious` and `should i be
+        worried` are deliberately excluded for the same reason.*
+      - ***The mutation check found a hollow test.** Reversing the gate order
+        left the self-harm ordering test passing, because its message never
+        tripped the scope gate. It now uses a message that trips both and
+        asserts that premise inline, so it cannot rot.*
 - [ ] **2.6** Conversation storage: last 10 turns from the `conversations`
       table, 30-day retention.
 - [ ] **2.7** `POST /api/assistant/chat` — auth middleware (login-only),
