@@ -17,7 +17,12 @@
 
 const DOCTOR_CARD_LIMIT = 10;
 
-const toDoctorCard = (doctor) => ({
+// `available` is passed in rather than read off the row, because the two tools
+// know it in different ways and neither should be guessed at. `doctor.available
+// ?? true` would look tidier and would silently start lying the day the search
+// query drops its filter.
+const toDoctorCard = (doctor, { available }) => ({
+  available,
   id: doctor.id,
   name: doctor.name,
   speciality: doctor.speciality,
@@ -52,13 +57,28 @@ const toAvailabilityCard = (result) => ({
 // Keyed by tool name. Anything not here returns null and never reaches a
 // browser.
 const PROJECTIONS = {
+  // The search query pins `d.available = TRUE`, which is also why the column
+  // is absent from its result — there is nothing to read, only a guarantee to
+  // restate.
   search_doctors: (result) =>
     Array.isArray(result) && result.length
-      ? { kind: 'doctors', doctors: result.slice(0, DOCTOR_CARD_LIMIT).map(toDoctorCard) }
+      ? {
+          kind: 'doctors',
+          doctors: result
+            .slice(0, DOCTOR_CARD_LIMIT)
+            .map((doctor) => toDoctorCard(doctor, { available: true })),
+        }
       : null,
 
+  // No such filter here: get_doctor answers about whichever doctor was asked
+  // for, accepting appointments or not.
   get_doctor: (result) =>
-    result ? { kind: 'doctors', doctors: [toDoctorCard(result)] } : null,
+    result
+      ? {
+          kind: 'doctors',
+          doctors: [toDoctorCard(result, { available: Boolean(result.available) })],
+        }
+      : null,
 
   check_availability: (result) =>
     result ? { kind: 'availability', ...toAvailabilityCard(result) } : null,

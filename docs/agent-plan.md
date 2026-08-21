@@ -92,6 +92,19 @@ not lost; none blocks the current phase.
   transparently); **6.1** is the natural home, since it already reworks this
   layer for Redis. *Found during 1.7.*
 
+- **The booking page offers slots for doctors who are not accepting.**
+  `Appointment.jsx` never reads `docInfo.available`, and `GET
+  /api/doctors/:id` returns a doctor regardless of the flag (unlike `GET
+  /api/doctors`, which filters `available = true`). So the full date and time
+  picker renders for a doctor the clinic has stopped booking. Reachable today
+  by typing the URL, and — before 3.4 handled it — from a `get_doctor` card.
+
+  3.4 stopped the *assistant* inviting it: the card projects `available` and
+  offers "View profile" instead of "Book an appointment". The page itself is
+  untouched, because it belongs to the booking flow rather than the assistant,
+  and the fix is a product decision (hide the picker? show a notice? 404?)
+  rather than a mechanical one. *Found during 3.4.*
+
 - **`frontend/` has no test runner, so UI guarantees rest on discipline.** The
   backend has 129 tests and a mutation-testing habit; the patient app has
   `eslint` and nothing else. That matters most for **rule 7**: the checked-at
@@ -570,7 +583,7 @@ replies pass.
       *Built together with 3.2: rule 7 forbids presenting availability as a
       promise, so a ✓ badge shipped without the checked-at line would have put
       a commit in history doing exactly that.*
-- [ ] **3.4** Tapping a doctor navigates to the existing booking page with the
+- [x] **3.4** Tapping a doctor navigates to the existing booking page with the
       doctor pre-selected.
 - [ ] **3.5** Loading, error, and rate-limited states.
 

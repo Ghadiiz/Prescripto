@@ -46,10 +46,21 @@ const AssistantPanel = () => {
     setDraft('');
   };
 
+  // Closing is an explicit dismissal, so it aborts whatever is in flight.
   const close = () => {
     stop();
     setIsOpen(false);
   };
+
+  // Collapsing is not closing. Tapping a doctor gets the panel out of the way
+  // — on mobile it is full-screen and would cover the booking page — but it
+  // must NOT abort: the provider call is already made and already paid for.
+  // Aborting would bin an answer we have been charged for, and skip saving the
+  // turn. Left alone it finishes, and reopening shows the completed reply.
+  //
+  // The thread survives regardless: AssistantPanel is mounted in App.jsx
+  // outside <Routes>, so changing route does not unmount it.
+  const collapse = () => setIsOpen(false);
 
   if (!isOpen) {
     return (
@@ -129,7 +140,11 @@ const AssistantPanel = () => {
             {message.cards?.map((card, cardIndex) =>
               card.kind === 'doctors' ? (
                 card.doctors.map((doctor) => (
-                  <DoctorCard key={`${cardIndex}-${doctor.id}`} doctor={doctor} />
+                  <DoctorCard
+                    key={`${cardIndex}-${doctor.id}`}
+                    doctor={doctor}
+                    onNavigate={collapse}
+                  />
                 ))
               ) : card.kind === 'availability' ? (
                 <AvailabilityCard key={cardIndex} availability={card} />

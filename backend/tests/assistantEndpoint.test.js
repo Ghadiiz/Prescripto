@@ -640,6 +640,7 @@ test('a doctor search emits a card of database fields, never the arguments', asy
     'addressLine1',
     'addressLine2',
     'area',
+    'available',
     'degree',
     'experienceYears',
     'fees',

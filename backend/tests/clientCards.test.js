@@ -46,6 +46,7 @@ test('a doctor card carries exactly the allowlisted fields', () => {
     'addressLine1',
     'addressLine2',
     'area',
+    'available',
     'degree',
     'experienceYears',
     'fees',
@@ -57,6 +58,39 @@ test('a doctor card carries exactly the allowlisted fields', () => {
     'name',
     'speciality',
   ]);
+});
+
+test('a searched doctor is always available — the query guarantees it', () => {
+  // searchDoctors pins `d.available = TRUE`, so the column is not even in its
+  // SELECT. The card restates the guarantee rather than reading an absent
+  // field and getting undefined.
+  const card = toClientCard('search_doctors', [doctorRow]);
+
+  assert.equal(card.doctors[0].available, true);
+  assert.equal(
+    doctorRow.available,
+    undefined,
+    'precondition: the search result carries no availability column',
+  );
+});
+
+test('a looked-up doctor reports its real availability', () => {
+  // get_doctor has no such filter: it answers about whoever was asked for.
+  const accepting = toClientCard('get_doctor', { ...doctorRow, available: true });
+  const notAccepting = toClientCard('get_doctor', { ...doctorRow, available: false });
+
+  assert.equal(accepting.doctors[0].available, true);
+  assert.equal(
+    notAccepting.doctors[0].available,
+    false,
+    'the UI must be able to stop offering a booking that cannot happen',
+  );
+
+  // MySQL hands back 1/0 for a tinyint, and `0` is falsy but not `false` —
+  // the UI compares against false, so the coercion has to happen here.
+  const fromMysql = toClientCard('get_doctor', { ...doctorRow, available: 0 });
+  assert.equal(fromMysql.doctors[0].available, false);
+  assert.equal(typeof fromMysql.doctors[0].available, 'boolean');
 });
 
 test('about never reaches a card, even when the tool returns it', () => {
