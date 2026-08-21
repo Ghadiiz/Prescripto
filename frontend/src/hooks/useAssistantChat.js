@@ -25,8 +25,11 @@ export const useAssistantChat = () => {
   const [status, setStatus] = useState(null);
   const [isStreaming, setIsStreaming] = useState(false);
   const [error, setError] = useState(null);
+  const [startedAt, setStartedAt] = useState(null);
 
   const abortRef = useRef(null);
+  // What Try again re-sends. A ref, not state: nothing renders from it.
+  const lastSentRef = useRef(null);
 
   const stop = useCallback(() => {
     abortRef.current?.abort();
@@ -68,14 +71,26 @@ export const useAssistantChat = () => {
   );
 
   const send = useCallback(
-    async (text) => {
+    async (text, { isRetry = false } = {}) => {
       const message = text.trim();
       if (!message || isStreaming) return;
 
       setError(null);
       setStatus(null);
       setIsStreaming(true);
-      setMessages((current) => [...current, { role: 'user', content: message }]);
+      // Timestamped so the panel can show how long a turn has been running.
+      // Measured worst case so far: 42.5 seconds to the first token.
+      setStartedAt(Date.now());
+
+      // A retry re-sends the SAME question, so it must not stack a second
+      // identical user bubble on the thread.
+      if (!isRetry) {
+        setMessages((current) => [
+          ...current,
+          { role: 'user', content: message },
+        ]);
+      }
+      lastSentRef.current = message;
 
       const controller = new AbortController();
       abortRef.current = controller;
@@ -149,6 +164,14 @@ export const useAssistantChat = () => {
               appendDelta(data.delta);
             } else if (name === 'done') {
               setStatus(null);
+              // How the turn ENDED is part of the turn. Without it the panel
+              // cannot tell a fixed safety response from an ordinary answer,
+              // which is what 3.5 exists to fix.
+              updateAssistantTurn((turn) => ({
+                ...turn,
+                stoppedReason: data.stoppedReason,
+                retryAfterSeconds: data.retryAfterSeconds ?? null,
+              }));
             } else if (name === 'error') {
               setError(data.message ?? FALLBACK_ERROR);
             }
@@ -164,12 +187,29 @@ export const useAssistantChat = () => {
         abortRef.current = null;
         setIsStreaming(false);
         setStatus(null);
+        setStartedAt(null);
       }
     },
-    [appendCard, appendDelta, backendUrl, isStreaming, token],
+    [appendCard, appendDelta, updateAssistantTurn, backendUrl, isStreaming, token],
   );
 
-  return { messages, status, isStreaming, error, send, stop };
+  // Manual on purpose: a retry spends another provider call, and the free tier
+  // is 20 a day per model. Never automatic.
+  const retry = useCallback(() => {
+    if (lastSentRef.current) send(lastSentRef.current, { isRetry: true });
+  }, [send]);
+
+  return {
+    messages,
+    status,
+    isStreaming,
+    error,
+    startedAt,
+    send,
+    retry,
+    stop,
+    canRetry: Boolean(lastSentRef.current) && !isStreaming,
+  };
 };
 
 export default useAssistantChat;

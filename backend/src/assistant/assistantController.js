@@ -49,10 +49,10 @@ const send = (res, event, data) => {
 
 // A single fixed answer that never involved the model: the guardrails, the
 // rate limiter, the capacity cap. Opens a stream, says one thing, closes.
-const sendFixedResponse = (res, text, reason) => {
+const sendFixedResponse = (res, text, reason, extra = {}) => {
   openStream(res);
   send(res, 'token', { delta: text });
-  send(res, 'done', { stoppedReason: reason });
+  send(res, 'done', { stoppedReason: reason, ...extra });
   res.end();
 };
 
@@ -77,8 +77,16 @@ export const chat = async (req, res) => {
   // Keyed on the authenticated user, never the IP.
   const limit = checkRateLimit(ctx.userId);
   if (!limit.allowed) {
+    // The header is correct HTTP and stays for any non-browser client. It is
+    // NOT how the panel learns the number: `cors()` sets no exposedHeaders, so
+    // a browser reading Retry-After gets null. Widening CORS app-wide for one
+    // panel is the larger change, so the value also travels in the SSE body,
+    // where the rest of this turn's state already lives.
     res.setHeader('Retry-After', String(limit.retryAfterSeconds));
-    return sendFixedResponse(res, RATE_LIMIT_MESSAGE, 'rate_limited');
+
+    return sendFixedResponse(res, RATE_LIMIT_MESSAGE, 'rate_limited', {
+      retryAfterSeconds: limit.retryAfterSeconds,
+    });
   }
 
   // Guardrails run BEFORE any provider call. Neither of these opens a

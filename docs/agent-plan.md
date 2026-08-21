@@ -585,10 +585,17 @@ replies pass.
       a commit in history doing exactly that.*
 - [x] **3.4** Tapping a doctor navigates to the existing booking page with the
       doctor pre-selected.
-- [ ] **3.5** Loading, error, and rate-limited states.
+- [x] **3.5** Loading, error, and rate-limited states.
 
 **Done when:** the full flow works in a browser, question through to the normal
-booking screen.
+booking screen. — **DONE.**
+A patient asks in the panel, watches the answer stream in behind labelled
+progress, sees doctors and availability as cards rather than markdown, and taps
+one through to the existing booking page. Every `stoppedReason` is presented
+for what it is — a fixed safety response is not a grey bubble, and an hourly
+limit is not the assistant's opinion. Verified in a browser end to end, with
+almost all of it driven by stubbed SSE so the free-tier budget went on the
+things only a live model can show.
 
 ---
 

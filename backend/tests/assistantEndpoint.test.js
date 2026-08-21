@@ -346,6 +346,16 @@ test('the budget is per user and per hour, and a refusal costs no provider call'
     refused.headers.get('retry-after'),
     'the client is told when to come back',
   );
+
+  // And told it in the SSE body too, because a BROWSER cannot read that
+  // header: cors() sets no exposedHeaders, so fetch sees null. Without this
+  // the panel can only say "later".
+  const { retryAfterSeconds } = refused.events.at(-1).data;
+  assert.equal(typeof retryAfterSeconds, 'number');
+  assert.ok(
+    retryAfterSeconds > 0 && retryAfterSeconds <= 3600,
+    `expected a wait inside the one-hour window, got ${retryAfterSeconds}`,
+  );
   assert.equal(
     providerCalls.length,
     callsBefore,
