@@ -9,6 +9,7 @@ import {
   resetRateLimits,
   MAX_REQUESTS_PER_HOUR,
 } from '../src/assistant/rateLimit.js';
+import { resetBudget, getBudget } from '../src/assistant/agentService.js';
 import {
   PHYSICAL_EMERGENCY_RESPONSE,
   SELF_HARM_RESPONSE,
@@ -165,6 +166,7 @@ after(async () => {
 
 const cleanup = async () => {
   resetRateLimits();
+  resetBudget();
   await db.query('DELETE FROM conversations WHERE user_id IN (?, ?)', [
     patientId,
     doctorId,
@@ -178,6 +180,7 @@ const cleanup = async () => {
 beforeEach(cleanup);
 afterEach(async () => {
   globalThis.fetch = realFetch;
+  delete process.env.GEMINI_DAILY_CALL_CAP;
   await cleanup();
 });
 
@@ -507,4 +510,81 @@ test('an abandoned turn is not saved as history', async () => {
     [patientId, 'patient'],
   );
   assert.equal(rows.length, 0, 'an aborted turn leaves no history');
+});
+
+// --- 9. running out of free-tier budget -------------------------------------
+
+// Spends the daily allowance without needing 50 real calls.
+const exhaustBudget = async () => {
+  process.env.GEMINI_DAILY_CALL_CAP = '1';
+  stubProvider(() => sseResponse([textChunk('first and last.')]));
+  await chat(tokenFor(patientId, 'patient'), {
+    message: 'find me a dermatologist',
+  });
+  assert.equal(getBudget().remaining, 0, 'precondition: the budget is spent');
+};
+
+test('at capacity the patient gets a friendly message, not an error', async () => {
+  await exhaustBudget();
+
+  const callsBefore = providerCalls.length;
+  const response = await chat(tokenFor(patientId, 'patient'), {
+    message: 'find me a cardiologist',
+  });
+
+  assert.equal(response.status, 200, 'not an error status');
+  assert.match(response.text, /limit of requests for today/);
+  assert.match(response.text, /browse doctors and book appointments/);
+  assert.equal(response.events.at(-1).data.stoppedReason, 'at_capacity');
+  assert.equal(
+    providerCalls.length,
+    callsBefore,
+    'we stop ourselves rather than making Google refuse us',
+  );
+
+  // No error event, and nothing provider-shaped on the wire.
+  assert.equal(response.events.filter((e) => e.event === 'error').length, 0);
+  const wire = JSON.stringify(response.events).toLowerCase();
+  for (const forbidden of ['gemini', 'quota', '429', 'model']) {
+    assert.ok(!wire.includes(forbidden), `"${forbidden}" must not be shown`);
+  }
+});
+
+test('at capacity, an emergency STILL gets the emergency response', async () => {
+  await exhaustBudget();
+
+  // The capacity check is deliberately the last gate. The emergency response
+  // needs no provider call, so no budget state may suppress it.
+  const response = await chat(tokenFor(patientId, 'patient'), {
+    message: 'my father is having a heart attack right now',
+  });
+
+  assert.equal(response.text, PHYSICAL_EMERGENCY_RESPONSE);
+  assert.equal(response.events.at(-1).data.stoppedReason, 'emergency');
+});
+
+test('the cap tripping mid-turn appends the message and saves no history', async () => {
+  // Two calls available, and a turn that wants three: one tool round, then the
+  // budget runs out before the model can answer.
+  process.env.GEMINI_DAILY_CALL_CAP = '2';
+  stubProvider((call) =>
+    call === 1
+      ? sseResponse([toolChunk('list_specialities', {})])
+      : sseResponse([toolChunk('search_doctors', { speciality: 'Dermatologist' })]),
+  );
+
+  const response = await chat(tokenFor(patientId, 'patient'), {
+    message: 'what specialities do you have',
+  });
+
+  assert.match(response.text, /limit of requests for today/);
+  assert.equal(response.events.at(-1).data.stoppedReason, 'at_capacity');
+  assert.equal(response.events.filter((e) => e.event === 'error').length, 0);
+
+  // An unfinished turn is not a turn — the same rule the abort path follows.
+  const [rows] = await db.query(
+    'SELECT id FROM conversations WHERE user_id = ? AND role = ?',
+    [patientId, 'patient'],
+  );
+  assert.equal(rows.length, 0, 'a turn cut short must not become history');
 });

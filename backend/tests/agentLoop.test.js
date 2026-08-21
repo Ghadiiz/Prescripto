@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 
 import { connectDB, getDB } from '../src/config/mysql.js';
 import { runConversation, MAX_ITERATIONS } from '../src/assistant/agentLoop.js';
+import { resetBudget } from '../src/assistant/agentService.js';
 import { buildToolDefinitions } from '../src/assistant/toolDefinitions.js';
 
 // The provider is stubbed at the fetch layer, so the real agentService mapping
@@ -45,6 +46,9 @@ const toolCallResponse = (calls) => ({
 });
 
 const stubProvider = (queue) => {
+  // The daily call counter is module state; without this it accumulates
+  // across the suite and eventually trips the cap in an unrelated test.
+  resetBudget();
   requests = [];
   globalThis.fetch = async (url, options) => {
     requests.push(JSON.parse(options.body));

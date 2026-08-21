@@ -490,7 +490,7 @@ Six tools, two guardrails, `runTool` as the single audited entry point, and an
       - **Done when:** an authenticated user can hold a streamed conversation
         end to end; guardrails fire before the model; unauthenticated requests
         are rejected; `ctx` comes only from the verified JWT.
-- [ ] **2.8** Free-tier budget management (in `agentService`) — keep the demo
+- [x] **2.8** Free-tier budget management (in `agentService`) — keep the demo
       reliable under a reviewer without lag or unpredictable failure.
       - Model rotation: rotate `gemini-3.6-flash` → `gemini-3.5-flash` →
         `gemini-3.1-flash-lite` on a 429 (daily-quota-exhausted), so the

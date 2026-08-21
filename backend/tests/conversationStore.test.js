@@ -10,7 +10,7 @@ import {
   MAX_TURNS,
   RETENTION_DAYS,
 } from '../src/assistant/conversationStore.js';
-import { generate } from '../src/assistant/agentService.js';
+import { generate, resetBudget } from '../src/assistant/agentService.js';
 import { buildToolDefinitions } from '../src/assistant/toolDefinitions.js';
 
 const AUDIT_SESSION_ID = 'dadadada-2222-3333-4444-555555555555';
@@ -46,6 +46,7 @@ after(async () => {
 });
 
 const cleanup = async () => {
+  resetBudget();
   await db.query('DELETE FROM conversations WHERE user_id = ?', [
     patientCtx.userId,
   ]);

@@ -5,6 +5,7 @@ import {
   generate,
   computeBackoffMs,
   ProviderError,
+  resetBudget,
 } from '../src/assistant/agentService.js';
 
 // No network and no database: `fetch` is stubbed, so these run anywhere.
@@ -41,6 +42,10 @@ const stubFetch = (queue) => {
 };
 
 beforeEach(() => {
+  // The daily call counter is module state shared across a whole suite. Left
+  // to accumulate it would drift toward the cap and fail unrelated tests later
+  // in the run — the same reason resetRateLimits() exists.
+  resetBudget();
   process.env.GEMINI_API_KEY = FAKE_KEY;
   // Keep retry waits negligible; the jitter maths is asserted directly below.
   process.env.GEMINI_RETRY_BASE_MS = '1';

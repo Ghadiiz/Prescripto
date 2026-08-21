@@ -7,6 +7,7 @@ import { emergencyCheck } from './guardrails/emergencyCheck.js';
 import { scopeCheck } from './guardrails/scopeCheck.js';
 import { loadHistory, saveHistory, appendTurn } from './conversationStore.js';
 import { checkRateLimit, RATE_LIMIT_MESSAGE } from './rateLimit.js';
+import { isAtCapacity, AtCapacityError } from './agentService.js';
 
 // The endpoint that wires Phase 2 together.
 //
@@ -18,6 +19,13 @@ const requestSchema = z
 const FRIENDLY_ERROR =
   'Something went wrong while I was working on that. Please try again in a ' +
   'moment.';
+
+// The free tier is a hard daily ceiling, so running out is a normal Tuesday,
+// not an error. Say so plainly and point at what still works.
+const AT_CAPACITY_MESSAGE =
+  'I have reached my limit of requests for today, so I cannot look anything ' +
+  'up right now. Please try again tomorrow — you can still browse doctors ' +
+  'and book appointments as usual.';
 
 // --- SSE plumbing -----------------------------------------------------------
 
@@ -84,6 +92,14 @@ export const chat = async (req, res) => {
     return sendFixedResponse(res, scope.response, 'out_of_scope');
   }
 
+  // LAST of the gates, deliberately: everything above answers without a
+  // provider call, so running out of budget must not be able to suppress a
+  // crisis response. Checked up front so the common case is one clean message
+  // rather than a turn that dies partway through.
+  if (isAtCapacity()) {
+    return sendFixedResponse(res, AT_CAPACITY_MESSAGE, 'at_capacity');
+  }
+
   const history = await loadHistory(ctx);
 
   // Minted here and threaded to runTool, so every audit row this turn writes
@@ -136,6 +152,17 @@ export const chat = async (req, res) => {
     res.end();
   } catch (error) {
     if (clientGone) return;
+
+    // The cap can also trip mid-turn — a turn is several calls, and the 50th
+    // can fall between them. The stream is already open and may already carry
+    // text, so the capacity message is appended rather than sent alone. The
+    // turn is NOT saved: an unfinished exchange is not an exchange, the same
+    // rule the abort path follows.
+    if (error instanceof AtCapacityError) {
+      send(res, 'token', { delta: AT_CAPACITY_MESSAGE });
+      send(res, 'done', { stoppedReason: 'at_capacity' });
+      return res.end();
+    }
 
     // Never leave the client hanging: one clean error event, then close.
     // The client is told the same thing whatever failed — a ProviderError's
