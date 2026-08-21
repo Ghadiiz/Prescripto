@@ -92,6 +92,20 @@ not lost; none blocks the current phase.
   transparently); **6.1** is the natural home, since it already reworks this
   layer for Redis. *Found during 1.7.*
 
+- **The chat panel cannot rehydrate its thread.** 2.6 stores the last 10 turns
+  per `(user_id, role)` and 2.7 replays them to the model, but there is no
+  endpoint that returns them. So the panel holds messages in React state only:
+  reload the page and the thread looks empty while the assistant still
+  remembers everything and will answer "the one in Khalda" correctly. The
+  visible history and the model's history disagree.
+
+  Closing it means a read-only `GET /api/assistant/history` scoped to
+  `ctx.userId` + `ctx.role` — small, but it is backend work with its own auth
+  and scoping tests, so it was left out of a UI increment rather than smuggled
+  in. A client-side mirror was rejected: it would be a second source of truth
+  that drifts from the server after the 10-turn trim or the 30-day purge.
+  *Found during 3.1.*
+
 - **Gemini free tier is 20 requests per DAY, per model — not ~15/minute.**
   The quota id is `GenerateRequestsPerDayPerProjectPerModel-FreeTier`, limit
   20. The per-minute figure this plan assumed is the *rate* limit; the daily
@@ -534,7 +548,7 @@ replies pass.
 
 ## Phase 3 — Chat UI
 
-- [ ] **3.1** Chat panel component in the patient app, consuming the SSE stream.
+- [x] **3.1** Chat panel component in the patient app, consuming the SSE stream.
 - [ ] **3.2** Message rendering: doctor card, availability ✓/✗ badge, maps
       button. The model returns fields; React decides how they look.
 - [ ] **3.3** "Availability checked at HH:MM" line on every availability answer.

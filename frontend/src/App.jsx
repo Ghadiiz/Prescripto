@@ -17,6 +17,7 @@ import VerifyEmail from './pages/VerifyEmail';
 import ResendVerification from './pages/ResendVerification';
 import ResetPassword from './pages/ResetPassword';
 import ForgotPassword from './pages/ForgotPassword';
+import AssistantPanel from './components/AssistantPanel';
 
 const App = () => {
   return (
@@ -43,6 +44,9 @@ const App = () => {
         <Route path="/reset-password" element={<ResetPassword />} />
       </Routes>
       <Footer />
+      {/* Fixed-position, so it rides above every page rather than sitting in
+          the layout flow. Renders nothing when signed out. */}
+      <AssistantPanel />
     </div>
   );
 };

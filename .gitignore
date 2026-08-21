@@ -2,3 +2,8 @@
 aiven-pre-001.sql
 aiven-pre-phase0.sql
 aiven-pre-005.sql
+
+# Claude Code workspace. settings.local.json holds machine-specific tool
+# permissions, and launch.json is dev-server config a solo repo has no reason
+# to share.
+.claude/
