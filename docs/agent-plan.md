@@ -103,12 +103,15 @@ not lost; none blocks the current phase.
   `gemini-3.5-flash`, `gemini-3.1-flash-lite`. The quota is per model, so
   switching models buys another 20.
 
-  **2.8 must be designed around this.** ~20 eval conversations at 3-4 requests
-  each is 60-80 requests — three to four days on one model. Run the
-  security-critical adversarial cases (booking attempts, other-patient access,
-  injected bio, emergency phrasing, prompt-leak) **live**, spread across the
-  three models; mock the routine happy-path cases. Decide before starting 2.8
-  whether to enable billing instead. *Found during 2.2.*
+  **2.8 and 2.9 both exist because of this.** 2.8 makes the app degrade
+  gracefully when the budget runs out (rotation across the three models, plus a
+  50-call daily soft-cap). 2.9's eval then has to fit inside what is left: ~20
+  conversations at 3-4 requests each is 60-80 requests — more than a single
+  day's ceiling even after rotation. Run the security-critical adversarial
+  cases (booking attempts, other-patient access, injected bio, emergency
+  phrasing, prompt-leak) **live**, spread across the three models; mock the
+  routine happy-path cases. Decide before starting 2.9 whether to enable
+  billing instead. *Found during 2.2.*
 
 ---
 
@@ -457,20 +460,70 @@ Six tools, two guardrails, `runTool` as the single audited entry point, and an
         so user_id alone would let patient #5 read doctor #5’s history.*
       - ***Migration 005 was required.** 003’s `idx_user` is non-unique, so
         the upsert had nothing to match — every save would insert a new row
-        and history would fragment silently. **Pending for Aiven.***
+        and history would fragment silently. **Applied to Aiven 2026-08-19** —
+        see Production state above.*
       - *Retention sweeps on save (no scheduler), and `purgeExpiredConversations`
         is exported for 6.2’s worker. Conversations expire; **audit rows do
         not** — tested both ways.*
       - *Verified live: text-only replay does not trip the thoughtSignature
         requirement, and the model still resolved "the one in Khalda" from it.*
-- [ ] **2.7** `POST /api/assistant/chat` — auth middleware (login-only),
-      rate limit (20/user/hour), SSE streaming response.
-- [ ] **2.8** Eval file: ~20 test conversations including the adversarial ones —
-      "book me anything", "show appointments for user 7", injected bio,
-      emergency phrasing, symptom description, prompt-leak attempt.
+- [x] **2.7** `POST /api/assistant/chat` — the endpoint that wires Phase 2
+      together.
+      - Auth middleware, login-only. Build `ctx = { userId, role }` ONLY from
+        the VERIFIED JWT (signature checked); never from request body/params.
+        This `ctx` is the root of the whole identity chain every Phase 1 tool
+        depends on.
+      - Request lifecycle order: authenticate → build ctx → load conversation
+        history (2.6, scoped to `ctx.userId` + `ctx.role`) → `emergencyCheck`
+        (2.4) → `scopeCheck` (2.5) → `runConversation` (2.2) → save the turn
+        (2.6). Guardrails run BEFORE any model call. Mint the `session_id` here
+        and thread it to `runTool` so audit rows are attributed.
+      - Per-user rate limit: **5 requests/user/hour**, keyed on `ctx.userId`
+        (NOT IP). On limit, return a friendly 429-style message, not a raw
+        error. In-memory is fine (resets on restart; harmless).
+      - SSE streaming response. This requires a NEW streaming path in
+        `agentService.generate` (Gemini `streamGenerateContent`) that stays
+        provider-neutral — the endpoint streams neutral chunks, never Gemini's
+        raw stream shape. Streaming must fail gracefully: a mid-stream provider
+        error sends a clean SSE error event and closes the connection, never
+        leaves the client hanging.
+      - **Done when:** an authenticated user can hold a streamed conversation
+        end to end; guardrails fire before the model; unauthenticated requests
+        are rejected; `ctx` comes only from the verified JWT.
+- [ ] **2.8** Free-tier budget management (in `agentService`) — keep the demo
+      reliable under a reviewer without lag or unpredictable failure.
+      - Model rotation: rotate `gemini-3.6-flash` → `gemini-3.5-flash` →
+        `gemini-3.1-flash-lite` on a 429 (daily-quota-exhausted), so the
+        assistant degrades gracefully instead of dying when one model's free
+        quota is used up. ~60 Gemini calls/day effective.
+      - Global daily soft-cap: an in-memory counter of ACTUAL Gemini calls made
+        today (not user requests — one user turn is several calls). Trip at 50
+        (headroom under the ~60 three-model ceiling), so the app stops itself
+        gracefully BEFORE Google hard-429s the last model. In-memory (resets on
+        restart; harmless for a demo — a reset just allows a few extra calls
+        before the cap re-engages). Reset the daily count at UTC midnight.
+      - When the cap is hit (or all three models are exhausted), the endpoint
+        returns a fixed, friendly "the assistant is at capacity for today,
+        please try again tomorrow" message — never a raw error or a hang.
+      - Stays provider-neutral: only `agentService` knows the model ids and
+        does the rotation; the endpoint and loop see a neutral "at capacity"
+        signal, not Gemini specifics.
+      - Note for 6.1: the in-memory counter and per-user limiter should move to
+        Redis at scale (shared across instances, survives restart).
+      - **Done when:** exhausting one model rotates to the next; hitting 50
+        calls returns the friendly capacity message; nothing lags or errors raw
+        when the budget is gone.
+- [ ] **2.9** Eval file: ~20 test conversations including the adversarial ones
+      (book me anything, show appointments for user 7, injected bio, emergency
+      phrasing, symptom description, prompt-leak). Run the security-critical
+      adversarial cases LIVE across the three working models; mock the routine
+      functional cases (they've been proven live already) to fit the ~20/day
+      quota. Done when the endpoint holds a conversation and every adversarial
+      case passes.
 
-**Done when:** you can curl the endpoint and hold a conversation. Every
-adversarial case in the eval passes.
+**Done when:** you can curl the endpoint and hold a streamed conversation, the
+assistant degrades gracefully when the free-tier budget runs out, and every
+adversarial case in the 2.9 eval passes.
 
 ---
 

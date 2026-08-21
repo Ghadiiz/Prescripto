@@ -8,6 +8,7 @@ import doctorRoutes from './src/doctors/routes/doctorRoutes.js';
 import appointmentRoutes from './src/appointments/routes/appointmentRoutes.js';
 import adminRoutes from './src/admin/routes/adminRoutes.js';
 import doctorPanelsRoutes from './src/doctors/routes/doctorPanelRoutes.js';
+import assistantRoutes from './src/assistant/assistantRoutes.js';
 import { notFound, errorHandler } from './src/middleware/errorHandler.js';
 import { databaseReady } from './src/middleware/databaseReady.js';
 import { AppError } from './src/utils/AppError.js';
@@ -67,6 +68,7 @@ app.use('/api/doctors', doctorRoutes);
 app.use('/api/appointments', appointmentRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/doctor', doctorPanelsRoutes);
+app.use('/api/assistant', assistantRoutes);
 
 app.use(notFound);
 app.use(errorHandler);

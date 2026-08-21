@@ -183,25 +183,36 @@ const fromGeminiResponse = (body) => {
   };
 };
 
-export const generate = async ({
-  system,
-  messages = [],
-  tools = [],
-  signal,
-} = {}) => {
+// Shared by generate() and generateStream() so the two cannot drift in how a
+// request is built or a key is required.
+const buildRequest = ({ system, messages = [], tools = [] }) => {
   // Read at call time, not import time, so the app still boots without a key.
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) {
     throw new ProviderError('GEMINI_API_KEY is not set', { retryable: false });
   }
 
-  const model = process.env.GEMINI_MODEL || DEFAULT_MODEL;
-
-  const payload = {
-    contents: toGeminiContents(messages),
-    ...(system ? { systemInstruction: { parts: [{ text: system }] } } : {}),
-    ...(toGeminiTools(tools) ? { tools: toGeminiTools(tools) } : {}),
+  return {
+    apiKey,
+    model: process.env.GEMINI_MODEL || DEFAULT_MODEL,
+    payload: {
+      contents: toGeminiContents(messages),
+      ...(system ? { systemInstruction: { parts: [{ text: system }] } } : {}),
+      ...(toGeminiTools(tools) ? { tools: toGeminiTools(tools) } : {}),
+    },
+    // Header rather than a query parameter: keys in URLs end up in logs and
+    // proxy traces.
+    headers: { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey },
   };
+};
+
+export const generate = async ({
+  system,
+  messages = [],
+  tools = [],
+  signal,
+} = {}) => {
+  const { apiKey, model, payload } = buildRequest({ system, messages, tools });
 
   let lastError;
 
@@ -256,3 +267,108 @@ export const generate = async ({
 
   throw lastError;
 };
+
+// Streaming counterpart to generate(). Yields PROVIDER-NEUTRAL events:
+//
+//   { type: 'text', delta }
+//   { type: 'done', text, toolCalls, finishReason, usage }
+//
+// Nothing Gemini-shaped escapes: chunks are parsed here, parts accumulated,
+// and the same normaliser produces the same shape generate() returns. Verified
+// live that a streamed tool round arrives as one chunk carrying functionCall
+// with args, id AND thoughtSignature, so streaming loses nothing.
+export async function* generateStream({
+  system,
+  messages = [],
+  tools = [],
+  signal,
+} = {}) {
+  const { model, payload, headers } = buildRequest({ system, messages, tools });
+
+  // No retry loop here: a stream that fails mid-body cannot be transparently
+  // replayed, because the caller has already seen some of it. Connection
+  // failures before the first byte still surface as a ProviderError, and the
+  // endpoint turns that into a clean SSE error event.
+  let response;
+  try {
+    response = await fetch(
+      `${API_BASE}/models/${model}:streamGenerateContent?alt=sse`,
+      { method: 'POST', headers, body: JSON.stringify(payload), signal },
+    );
+  } catch (error) {
+    if (error.name === 'AbortError') throw error;
+    throw new ProviderError(
+      `Provider request failed: ${redact(error.message, headers['x-goog-api-key'])}`,
+      { retryable: true },
+    );
+  }
+
+  if (!response.ok) {
+    const body = redact(
+      await response.text().catch(() => ''),
+      headers['x-goog-api-key'],
+    );
+    throw new ProviderError(`Provider returned ${response.status}: ${body}`, {
+      status: response.status,
+      retryable: isRetryableStatus(response.status),
+    });
+  }
+
+  // Accumulated across chunks so the final `done` event carries the same
+  // normalised shape as generate().
+  const parts = [];
+  let usage = null;
+  let finishReason = null;
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = '';
+
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      buffer += decoder.decode(value, { stream: true });
+
+      // SSE frames are newline-delimited; the last fragment may be partial.
+      const lines = buffer.split('\n');
+      buffer = lines.pop() ?? '';
+
+      for (const line of lines) {
+        if (!line.startsWith('data: ')) continue;
+
+        let chunk;
+        try {
+          chunk = JSON.parse(line.slice(6));
+        } catch {
+          // A malformed frame is not worth killing a live stream over.
+          continue;
+        }
+
+        const candidate = chunk.candidates?.[0];
+        if (chunk.usageMetadata) usage = chunk.usageMetadata;
+        if (candidate?.finishReason) finishReason = candidate.finishReason;
+
+        for (const part of candidate?.content?.parts ?? []) {
+          parts.push(part);
+          if (typeof part.text === 'string' && part.text.length > 0) {
+            yield { type: 'text', delta: part.text };
+          }
+        }
+      }
+    }
+  } finally {
+    // Releases the socket whether the stream ended, threw, or the consumer
+    // stopped iterating early.
+    reader.cancel().catch(() => {});
+  }
+
+  yield {
+    type: 'done',
+    ...fromGeminiResponse({
+      candidates: [{ content: { parts }, finishReason }],
+      usageMetadata: usage,
+    }),
+  };
+}

@@ -1,4 +1,4 @@
-import { generate } from './agentService.js';
+import { generate, generateStream } from './agentService.js';
 import { runTool } from './runTool.js';
 import { buildToolDefinitions } from './toolDefinitions.js';
 import { emergencyCheck } from './guardrails/emergencyCheck.js';
@@ -15,12 +15,32 @@ const CAP_MESSAGE =
   'I could not finish working that out. Could you rephrase, or ask about one ' +
   'thing at a time?';
 
+// Streams when a caller supplies onEvent, otherwise makes a plain request.
+// Both paths use the same normalised shape, so the loop below is identical
+// either way.
+const generateTurn = async ({ system, messages, tools, signal, onEvent }) => {
+  if (!onEvent) return generate({ system, messages, tools, signal });
+
+  let final = null;
+
+  for await (const event of generateStream({ system, messages, tools, signal })) {
+    if (event.type === 'text') {
+      onEvent({ type: 'text', delta: event.delta });
+    } else if (event.type === 'done') {
+      final = event;
+    }
+  }
+
+  return final ?? { text: '', toolCalls: [], finishReason: 'stop', usage: null };
+};
+
 export const runConversation = async ({
   ctx,
   sessionId,
   system,
   messages = [],
   signal,
+  onEvent,
 } = {}) => {
   // Before anything else: no provider call, no tool call, no audit row. A
   // person describing an emergency must not wait on a model round trip, and
@@ -61,11 +81,12 @@ export const runConversation = async ({
   let lastText = '';
 
   for (let iteration = 1; iteration <= MAX_ITERATIONS; iteration += 1) {
-    const response = await generate({
+    const response = await generateTurn({
       system,
       messages: conversation,
       tools: toolDefinitions,
       signal,
+      onEvent,
     });
 
     if (response.text) lastText = response.text;
@@ -102,6 +123,11 @@ export const runConversation = async ({
       // It THROWS when the audit write fails, and that must not be caught into
       // a tool result — the turn ends with no model-visible text. Letting it
       // propagate is the entire reason 1.7 chose a throw over an error object.
+      // Announced BEFORE the tool runs, so a client has something to show
+      // during a multi-second round. Tool NAME only — never arguments, never
+      // results.
+      onEvent?.({ type: 'status', tool: call.name });
+
       const result = await runTool(ctx, call.name, call.args, { sessionId });
 
       toolCallsMade += 1;
