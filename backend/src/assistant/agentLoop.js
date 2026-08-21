@@ -132,6 +132,11 @@ export const runConversation = async ({
 
       toolCallsMade += 1;
 
+      // Reported, not rendered. The loop stays UI-agnostic — it says what a
+      // tool returned and the controller decides what, if any of it, is
+      // allowed to reach a browser.
+      onEvent?.({ type: 'result', tool: call.name, result });
+
       // One tool result per call, in the order the calls were made.
       // `providerRef` is opaque: carried through so the provider can pair the
       // result with its call, never inspected here.

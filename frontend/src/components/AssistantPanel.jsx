@@ -2,6 +2,8 @@ import React, { useContext, useEffect, useRef, useState } from 'react';
 
 import { AppContext } from '../context/AppContext';
 import { useAssistantChat } from '../hooks/useAssistantChat';
+import DoctorCard from './DoctorCard';
+import AvailabilityCard from './AvailabilityCard';
 
 // The assistant panel.
 //
@@ -98,21 +100,41 @@ const AssistantPanel = () => {
         )}
 
         {messages.map((message, index) => (
-          <div
-            key={index}
-            className={
-              message.role === 'user' ? 'flex justify-end' : 'flex justify-start'
-            }
-          >
-            <p
-              className={`max-w-[85%] whitespace-pre-wrap rounded-lg px-3 py-2 ${
+          <div key={index} className="space-y-2">
+            <div
+              className={
                 message.role === 'user'
-                  ? 'bg-primary text-white'
-                  : 'bg-gray-100 text-gray-800'
-              }`}
+                  ? 'flex justify-end'
+                  : 'flex justify-start'
+              }
             >
-              {message.content}
-            </p>
+              {/* An empty assistant turn exists while its cards stream in and
+                  before any text arrives — don't render an empty bubble. */}
+              {message.content && (
+                <p
+                  className={`max-w-[85%] whitespace-pre-wrap rounded-lg px-3 py-2 ${
+                    message.role === 'user'
+                      ? 'bg-primary text-white'
+                      : 'bg-gray-100 text-gray-800'
+                  }`}
+                >
+                  {message.content}
+                </p>
+              )}
+            </div>
+
+            {/* Cards arrive before the prose, so they sit above it — the
+                patient sees what was found while the answer is still being
+                written. */}
+            {message.cards?.map((card, cardIndex) =>
+              card.kind === 'doctors' ? (
+                card.doctors.map((doctor) => (
+                  <DoctorCard key={`${cardIndex}-${doctor.id}`} doctor={doctor} />
+                ))
+              ) : card.kind === 'availability' ? (
+                <AvailabilityCard key={cardIndex} availability={card} />
+              ) : null,
+            )}
           </div>
         ))}
 

@@ -387,13 +387,18 @@ test('status precedes tool execution and carries the tool name only', async () =
   );
   assert.ok(statusIndex < finalTokenIndex, 'status arrives before the answer');
 
-  // Arguments and results are ours, not the client's. Two layers enforce this
-  // — the loop only ever puts a name in the event, and the controller narrows
-  // again on the way out — so breaking either one alone leaves the wire clean.
-  // Verified by mutating both at once, which this assertion catches.
-  const wire = JSON.stringify(response.events);
-  assert.ok(!wire.includes('Dermatologist'), 'no tool ARGUMENTS on the wire');
-  assert.ok(!wire.includes('speciality'), 'no argument names either');
+  // Scoped to the STATUS event, which is what this test is about. It used to
+  // assert that nothing tool-shaped appeared anywhere on the wire — true only
+  // while no structured data was ever intended. 3.2 sends doctor fields
+  // deliberately, through an allowlist, so the blanket claim would now fail
+  // for the right reason. The precise property it stood in for — arguments
+  // stay server-side — is asserted on cards below and in clientCards.test.js.
+  //
+  // Two layers still enforce it: the loop puts only a name in the event, and
+  // the controller narrows again on the way out.
+  const statusWire = JSON.stringify(statuses);
+  assert.ok(!statusWire.includes('Dermatologist'), 'no tool ARGUMENTS in status');
+  assert.ok(!statusWire.includes('speciality'), 'no argument names either');
 
   assert.equal(response.events.at(-1).event, 'done');
   assert.equal(response.events.at(-1).data.toolCallsMade, 1);
@@ -602,4 +607,109 @@ test('the cap tripping mid-turn appends the message and saves no history', async
     [patientId, 'patient'],
   );
   assert.equal(rows.length, 0, 'a turn cut short must not become history');
+});
+
+// --- 10. structured cards on the wire ---------------------------------------
+
+test('a doctor search emits a card of database fields, never the arguments', async () => {
+  stubProvider((call) =>
+    call === 1
+      ? sseResponse([
+          toolChunk('search_doctors', { speciality: 'Dermatologist' }),
+        ])
+      : sseResponse([textChunk('I found a few.')]),
+  );
+
+  const response = await chat(tokenFor(patientId, 'patient'), {
+    message: 'find me a dermatologist',
+  });
+
+  const cards = response.events.filter((e) => e.event === 'card');
+  assert.equal(cards.length, 1, 'one card per tool result that has one');
+  assert.equal(cards[0].data.kind, 'doctors');
+  assert.ok(cards[0].data.doctors.length >= 1);
+
+  // Real rows from the database, not an echo of what the model asked for.
+  const [doctor] = cards[0].data.doctors;
+  assert.equal(typeof doctor.id, 'number');
+  assert.equal(typeof doctor.name, 'string');
+  assert.match(doctor.mapsUrl, /^https:\/\/www\.google\.com\/maps/);
+
+  // The allowlist shape, asserted where it actually crosses to a browser.
+  assert.deepEqual(Object.keys(doctor).sort(), [
+    'addressLine1',
+    'addressLine2',
+    'area',
+    'degree',
+    'experienceYears',
+    'fees',
+    'gender',
+    'id',
+    'image',
+    'languages',
+    'mapsUrl',
+    'name',
+    'speciality',
+  ]);
+
+  const wire = JSON.stringify(response.events);
+  assert.ok(!wire.includes('_unverified'), 'prompt plumbing stays server-side');
+  assert.ok(!wire.includes('about'), 'the injectable free-text field never ships');
+});
+
+test('an availability card always carries the time it was checked', async () => {
+  const [[doctor]] = await db.query(
+    'SELECT id FROM doctors WHERE available = 1 ORDER BY id LIMIT 1',
+  );
+
+  stubProvider((call) =>
+    call === 1
+      ? sseResponse([
+          toolChunk('check_availability', {
+            doctor_id: doctor.id,
+            date: '2031-03-04',
+          }),
+        ])
+      : sseResponse([textChunk('There is room that day.')]),
+  );
+
+  const response = await chat(tokenFor(patientId, 'patient'), {
+    message: 'is that doctor free',
+  });
+
+  const [card] = response.events.filter((e) => e.event === 'card');
+  assert.equal(card.data.kind, 'availability');
+
+  // Rule 7. A slot count that reaches the UI without the moment it was true
+  // is a promise, and the UI would have nothing to caveat it with.
+  assert.ok(card.data.checkedAt, 'checkedAt must ship with the counts');
+  assert.ok(
+    !Number.isNaN(Date.parse(card.data.checkedAt)),
+    'and must be a real timestamp the browser can format',
+  );
+  assert.equal(typeof card.data.dates[0].freeSlotCount, 'number');
+});
+
+test('tools with no card projection put nothing on the wire', async () => {
+  stubProvider((call) =>
+    call === 1
+      ? sseResponse([toolChunk('list_specialities', {})])
+      : sseResponse([textChunk('We cover six areas.')]),
+  );
+
+  const response = await chat(tokenFor(patientId, 'patient'), {
+    message: 'what specialities do you have',
+  });
+
+  // The tool ran — this is the fail-closed default, not an absent call.
+  assert.equal(
+    response.events.filter((e) => e.event === 'status').length,
+    1,
+    'precondition: the tool really did run',
+  );
+  assert.equal(
+    response.events.filter((e) => e.event === 'card').length,
+    0,
+    'a tool without a projection is silent',
+  );
 });

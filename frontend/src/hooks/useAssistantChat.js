@@ -37,21 +37,35 @@ export const useAssistantChat = () => {
   // appending to state afterwards would be an update on an unmounted tree.
   useEffect(() => stop, [stop]);
 
-  const appendDelta = useCallback((delta) => {
+  // Both deltas and cards land on the SAME assistant turn, so they share one
+  // updater. Cards arrive during the tool rounds — before any text — so this
+  // has to be able to open the turn as well as extend it.
+  const updateAssistantTurn = useCallback((apply) => {
     setMessages((current) => {
       const next = [...current];
       const last = next.at(-1);
 
-      // The assistant's turn is one message that grows, not one per chunk.
       if (last?.role === 'assistant') {
-        next[next.length - 1] = { ...last, content: last.content + delta };
+        next[next.length - 1] = apply(last);
       } else {
-        next.push({ role: 'assistant', content: delta });
+        next.push(apply({ role: 'assistant', content: '', cards: [] }));
       }
 
       return next;
     });
   }, []);
+
+  const appendDelta = useCallback(
+    (delta) =>
+      updateAssistantTurn((turn) => ({ ...turn, content: turn.content + delta })),
+    [updateAssistantTurn],
+  );
+
+  const appendCard = useCallback(
+    (card) =>
+      updateAssistantTurn((turn) => ({ ...turn, cards: [...turn.cards, card] })),
+    [updateAssistantTurn],
+  );
 
   const send = useCallback(
     async (text) => {
@@ -125,6 +139,11 @@ export const useAssistantChat = () => {
               // For a multi-tool turn this is the only thing that arrives for
               // several seconds. Measured at nine, so it is not decoration.
               setStatus(data.tool);
+            } else if (name === 'card') {
+              // Structured rows straight from the database, already narrowed
+              // by the server's allowlist. React renders them; the model's
+              // prose only has to say what it found.
+              appendCard(data);
             } else if (name === 'token') {
               setStatus(null);
               appendDelta(data.delta);
@@ -147,7 +166,7 @@ export const useAssistantChat = () => {
         setStatus(null);
       }
     },
-    [appendDelta, backendUrl, isStreaming, token],
+    [appendCard, appendDelta, backendUrl, isStreaming, token],
   );
 
   return { messages, status, isStreaming, error, send, stop };

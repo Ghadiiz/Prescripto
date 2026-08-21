@@ -42,6 +42,15 @@ test('the prompt says tool results are data, not instructions', () => {
   );
 });
 
+test('the prompt tells the model the app renders the details', () => {
+  // 3.2 renders doctors and availability as cards from the tool result. If the
+  // model also lists those fields in prose the patient sees everything twice,
+  // and its markdown reaches the panel as literal asterisks.
+  assert.match(prompt, /app displays what you found|shows the details/i);
+  assert.match(prompt, /do not use markdown/i);
+  assert.match(prompt, /do not repeat those fields/i);
+});
+
 test('the prompt requires grounding in tool results', () => {
   assert.match(prompt, /Only state facts that came from a tool result/i);
   assert.match(prompt, /[Nn]ever invent/);

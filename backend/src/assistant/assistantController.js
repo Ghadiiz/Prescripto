@@ -8,6 +8,7 @@ import { scopeCheck } from './guardrails/scopeCheck.js';
 import { loadHistory, saveHistory, appendTurn } from './conversationStore.js';
 import { checkRateLimit, RATE_LIMIT_MESSAGE } from './rateLimit.js';
 import { isAtCapacity, AtCapacityError } from './agentService.js';
+import { toClientCard } from './clientCards.js';
 
 // The endpoint that wires Phase 2 together.
 //
@@ -133,8 +134,17 @@ export const chat = async (req, res) => {
       messages: [...history, { role: 'user', content: userText }],
       signal: controller.signal,
       onEvent: (event) => {
-        if (event.type === 'text') send(res, 'token', { delta: event.delta });
-        else if (event.type === 'status') send(res, 'status', { tool: event.tool });
+        if (event.type === 'text') {
+          send(res, 'token', { delta: event.delta });
+        } else if (event.type === 'status') {
+          send(res, 'status', { tool: event.tool });
+        } else if (event.type === 'result') {
+          // The allowlist is the only thing that turns a tool result into
+          // something a browser sees. It returns null for any tool without an
+          // explicit projection, so nothing leaves here by default.
+          const card = toClientCard(event.tool, event.result);
+          if (card) send(res, 'card', card);
+        }
       },
     });
 

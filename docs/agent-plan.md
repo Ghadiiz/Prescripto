@@ -92,6 +92,21 @@ not lost; none blocks the current phase.
   transparently); **6.1** is the natural home, since it already reworks this
   layer for Redis. *Found during 1.7.*
 
+- **`frontend/` has no test runner, so UI guarantees rest on discipline.** The
+  backend has 129 tests and a mutation-testing habit; the patient app has
+  `eslint` and nothing else. That matters most for **rule 7**: the checked-at
+  caveat in `AvailabilityCard.jsx` is protected only by the backend test that
+  forces `checkedAt` to ship, and by the line being rendered unconditionally so
+  no data shape can drop it. Deleting the line is caught by a human reading the
+  diff and nothing more. The same applies to the panel's other guarantees —
+  cards rendering only allowlisted fields, the launcher hiding when signed out,
+  the abort on close.
+
+  **Phase 6 candidate:** wire up Vitest + React Testing Library and port the
+  browser checks done by hand in 3.1-3.2 into real tests. Not urgent while the
+  UI is small, and deliberately not bolted onto a UI increment. *Found during
+  3.2.*
+
 - **The chat panel cannot rehydrate its thread.** 2.6 stores the last 10 turns
   per `(user_id, role)` and 2.7 replays them to the model, but there is no
   endpoint that returns them. So the panel holds messages in React state only:
@@ -549,9 +564,12 @@ replies pass.
 ## Phase 3 — Chat UI
 
 - [x] **3.1** Chat panel component in the patient app, consuming the SSE stream.
-- [ ] **3.2** Message rendering: doctor card, availability ✓/✗ badge, maps
+- [x] **3.2** Message rendering: doctor card, availability ✓/✗ badge, maps
       button. The model returns fields; React decides how they look.
-- [ ] **3.3** "Availability checked at HH:MM" line on every availability answer.
+- [x] **3.3** "Availability checked at HH:MM" line on every availability answer.
+      *Built together with 3.2: rule 7 forbids presenting availability as a
+      promise, so a ✓ badge shipped without the checked-at line would have put
+      a commit in history doing exactly that.*
 - [ ] **3.4** Tapping a doctor navigates to the existing booking page with the
       doctor pre-selected.
 - [ ] **3.5** Loading, error, and rate-limited states.
