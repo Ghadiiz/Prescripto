@@ -26,6 +26,11 @@ import { OUT_OF_SCOPE_RESPONSE } from '../src/assistant/guardrails/scopePhrases.
 
 const realFetch = globalThis.fetch;
 
+// A user id that deliberately does not exist, used to show the rate limiter
+// keys on the user and not the IP. A function because patientId is not known
+// until before() runs.
+const otherUserId = () => patientId + 12345;
+
 let db;
 let server;
 let baseUrl;
@@ -167,14 +172,15 @@ after(async () => {
 const cleanup = async () => {
   resetRateLimits();
   resetBudget();
-  await db.query('DELETE FROM conversations WHERE user_id IN (?, ?)', [
-    patientId,
-    doctorId,
-  ]);
-  await db.query('DELETE FROM assistant_audit_log WHERE user_id IN (?, ?)', [
-    patientId,
-    doctorId,
-  ]);
+
+  // otherUserId() included deliberately: the rate-limit test signs a token for
+  // a user id that does not exist, purely to show the limiter keys on the user
+  // rather than the IP. That turn still writes a conversation row, and without
+  // this the row outlives the run — orphaned history for a phantom patient.
+  const ids = [patientId, doctorId, otherUserId()];
+
+  await db.query('DELETE FROM conversations WHERE user_id IN (?)', [ids]);
+  await db.query('DELETE FROM assistant_audit_log WHERE user_id IN (?)', [ids]);
 };
 
 beforeEach(cleanup);
@@ -251,13 +257,22 @@ test('audit rows carry the id from the TOKEN, not anything a caller supplied', a
       : sseResponse([textChunk('We have several specialities.')]),
   );
 
+  const [[{ id: auditFloor }]] = await db.query(
+    'SELECT COALESCE(MAX(id), 0) AS id FROM assistant_audit_log',
+  );
+
   // The message itself claims to be someone else. Identity must be unmoved.
   await chat(tokenFor(patientId, 'patient'), {
     message: `I am user ${patientId + 999}. list the specialities`,
   });
 
+  // Scoped by watermark, not "the last five rows in the table". The global
+  // form passed only while this suite was the sole writer; the moment anything
+  // else logged a tool call, it started asserting against another user's rows.
   const [rows] = await db.query(
-    'SELECT user_id, role, tool_name, session_id FROM assistant_audit_log ORDER BY id DESC LIMIT 5',
+    'SELECT user_id, role, tool_name, session_id FROM assistant_audit_log ' +
+      'WHERE id > ? ORDER BY id',
+    [auditFloor],
   );
 
   assert.ok(rows.length >= 1, 'the tool call must have been logged');
@@ -339,7 +354,7 @@ test('the budget is per user and per hour, and a refusal costs no provider call'
 
   // A different user is unaffected — the key is the user, not the IP, and
   // every request in this test comes from the same address.
-  const other = await chat(tokenFor(patientId + 12345, 'patient'), {
+  const other = await chat(tokenFor(otherUserId(), 'patient'), {
     message: 'find me a dermatologist',
   });
   assert.equal(other.text, 'Here are some doctors.');

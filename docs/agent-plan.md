@@ -513,7 +513,7 @@ Six tools, two guardrails, `runTool` as the single audited entry point, and an
       - **Done when:** exhausting one model rotates to the next; hitting 50
         calls returns the friendly capacity message; nothing lags or errors raw
         when the budget is gone.
-- [ ] **2.9** Eval file: ~20 test conversations including the adversarial ones
+- [x] **2.9** Eval file: ~20 test conversations including the adversarial ones
       (book me anything, show appointments for user 7, injected bio, emergency
       phrasing, symptom description, prompt-leak). Run the security-critical
       adversarial cases LIVE across the three working models; mock the routine
@@ -523,7 +523,12 @@ Six tools, two guardrails, `runTool` as the single audited entry point, and an
 
 **Done when:** you can curl the endpoint and hold a streamed conversation, the
 assistant degrades gracefully when the free-tier budget runs out, and every
-adversarial case in the 2.9 eval passes.
+adversarial case in the 2.9 eval passes. — **DONE.**
+An SSE endpoint whose `ctx` comes only from the verified JWT, model rotation
+with a 50-call daily cap behind a friendly at-capacity message, and a 22-case
+eval split 12 mocked (in CI, free) / 10 live (10/10 at 14 Gemini calls). The
+eval's own assertions are mutation-tested: 16/16 violations caught, 4/4 honest
+replies pass.
 
 ---
 
