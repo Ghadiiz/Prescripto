@@ -34,8 +34,8 @@ handle HTTP only. Services hold business logic. Models hold SQL.
 
 ## Commands
 
-No root `package.json` — every npm command runs inside `backend/`, `frontend/`
-or `admin/`.
+No root `package.json` — every npm command runs inside `backend/`, `frontend/`,
+`admin/` or `mcp/`.
 
 ### Full stack (Docker)
 

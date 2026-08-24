@@ -601,8 +601,19 @@ things only a live model can show.
 
 ## Phase 4 — MCP server
 
-- [ ] **4.1** Add `@modelcontextprotocol/sdk`. Scaffold `mcp/patient-server.js`
+- [x] **4.1** Add the MCP server SDK. Scaffold `mcp/patient-server.js`
       importing the Phase 1 tool functions directly.
+      - *Package corrected during 4.1:* the TypeScript SDK has split into
+        per-role packages, so this uses **`@modelcontextprotocol/server`
+        v2.0.0**, not `@modelcontextprotocol/sdk`. Both are current (published
+        the same day from the same repo, neither deprecated), but the footprint
+        decides it: the server package pulls **2** dependencies (`zod ^4.2.0`,
+        which dedupes onto the 4.4.3 already in use, plus
+        `@modelcontextprotocol/core`), against **17** for the combined SDK —
+        including `express`, `hono`, `cors`, `express-rate-limit`, `jose` and
+        `pkce-challenge`, an HTTP and OAuth stack a stdio server never runs.
+      - *`mcp/` is its own npm root*, so CLAUDE.md's npm-roots line now lists
+        four directories.
 - [ ] **4.2** Auth: how a JWT reaches the server and becomes `ctx`.
 - [ ] **4.3** Register the patient tools, reusing the same zod schemas.
 - [ ] **4.4** `mcp/README.md` with Claude Desktop setup instructions.

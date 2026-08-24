@@ -285,16 +285,25 @@ test('crossing UTC midnight clears both the count and the exhausted models', asy
   stubFetch([response(429, dailyQuotaBody), response(200, okBody)]);
   await generate({ messages: [{ role: 'user', content: 'hi' }] });
 
-  const today = Date.parse('2026-08-21T23:59:00Z');
-  const tomorrow = Date.parse('2026-08-22T00:01:00Z');
+  // Derived from the real clock, never hardcoded. The first version of this
+  // test pinned 2026-08-21/22 and passed only on the day it was written: once
+  // the real date moved on, generate() above stamped the budget with the REAL
+  // day, so reading it back at a hardcoded "today" looked like a rollover,
+  // zeroed the counter, and failed the assertion below. The test broke
+  // precisely because the rollover logic works.
+  const todayUtc = new Date().toISOString().slice(0, 10);
+  const today = Date.parse(`${todayUtc}T23:59:00Z`);
+  const tomorrow = today + 2 * 60 * 1000;
+  const tomorrowUtc = new Date(tomorrow).toISOString().slice(0, 10);
 
   const before = getBudget(today);
-  assert.equal(before.day, '2026-08-21');
+  assert.equal(before.day, todayUtc);
   assert.ok(before.callsToday > 0);
   assert.ok(before.exhaustedModels.length > 0);
 
   const after = getBudget(tomorrow);
-  assert.equal(after.day, '2026-08-22');
+  assert.equal(after.day, tomorrowUtc);
+  assert.notEqual(tomorrowUtc, todayUtc, 'the two instants must straddle midnight');
   assert.equal(after.callsToday, 0, 'the daily count resets');
   assert.deepEqual(
     after.exhaustedModels,
