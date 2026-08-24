@@ -108,6 +108,40 @@ not lost; none blocks the current phase.
   guardrail: `.strict()` is what stops a smuggled `user_id` reaching a tool.
   *Found during 4.3.*
 
+- **Over MCP the host's model widens tool calls beyond the question asked.**
+  Not a defect — behaviour worth recognising before someone reads the audit log
+  and suspects the filters are broken.
+
+  Observed against a live Claude Desktop session. Asking for "dermatologists in
+  Khalda" produced two calls, not one:
+
+  | tool | arguments | results |
+  |---|---|---|
+  | `search_doctors` | `{"area":"Khalda","speciality":"Dermatologist"}` | 1 |
+  | `search_doctors` | `{"area":"Khalda"}` | 3 |
+
+  and asking about a single doctor produced `get_doctor {"doctor_id":393}` → 1
+  alongside `search_doctors {}` → 16, the whole directory. The unfiltered
+  full-table call recurs, appearing to precede several narrower ones.
+
+  **The filters are correct.** `assistant_audit_log` shows every call returned
+  exactly what its arguments specified — 1 Khalda dermatologist, 3 Khalda
+  doctors, 16 doctors overall. Nothing is being ignored or over-fetched by a
+  tool; the extra breadth is the host's model choosing to widen.
+
+  **Why this transport and not the web app.** Over MCP the *host* drives the
+  model, so 2.3's system prompt and 2.2's agent loop — which constrain how the
+  chat endpoint calls tools — do not apply. The server answers what it is
+  asked and has no say in what gets asked.
+
+  **Tool descriptions were deliberately left alone.** Tightening them to
+  discourage broad calls would be guessing at another model's behaviour, cannot
+  suppress it from the server side anyway, and the widening is arguably useful:
+  fetching the directory before narrowing gives the host context our own loop
+  gets from conversation history. Worth revisiting only if it becomes a
+  performance or data-exposure concern — the tools are read-only and every call
+  is audited, so neither applies today. *Found during 4.4.*
+
 - **The booking page offers slots for doctors who are not accepting.**
   `Appointment.jsx` never reads `docInfo.available`, and `GET
   /api/doctors/:id` returns a doctor regardless of the flag (unlike `GET
