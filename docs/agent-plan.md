@@ -57,17 +57,20 @@ and keys.
   in production yet. *(Both now receive writes: `main` deploys as of the Phase 4
   merge.)*
 
-- **006_notifications_waitlist.sql** — **PENDING on Aiven.** Applied locally
-  2026-08-24. Creates `waitlist` and `notifications`.
+- **006_notifications_waitlist.sql** — `waitlist` and `notifications` both
+  exist on Aiven. The `unique_active_request` unique key on `waitlist` is
+  verified with `SHOW INDEXES` (`Non_unique = 0`) — the constraint 5.3's write
+  tool depends on, so a missing one would move duplicate prevention back into
+  application code without anything failing loudly. `schema_migrations` now
+  holds all six rows.
 
-  Lower urgency than 003 and 005 were, because nothing in production reads or
-  writes these tables until 5.2's endpoint and 5.3's tool ship — an un-applied
-  006 is invisible until then rather than an immediate 500. It must be applied
-  **before** those increments reach `main`, though, and `main` now deploys on
-  push.
+  Applied 2026-08-24 after a fresh backup. **No duplicate pre-check was
+  needed**, unlike 005: both tables are new, so there were no existing rows for
+  the unique key or the CHECK to reject on the way in.
 
-  Both tables are new and empty, so there is nothing for the constraints to
-  reject on the way in: no duplicate pre-check is needed, unlike 005.
+  Both tables are **empty and stay empty until 5.2's notification writes and
+  5.3's `join_waitlist` ship** — the same position `conversations` and
+  `assistant_audit_log` were in before Phase 4 reached `main`.
 
 `npm run seed` must never run against Aiven — it opens with `DELETE FROM` on all
 four tables. Since 0.7 this is enforced rather than trusted: `database/seed.js`
@@ -752,7 +755,8 @@ not touched.
       - Every constraint mutation-tested against the live schema. One could not
         be broken at all: `idx_unread` is refused with `ER_DROP_INDEX_FK`
         because the FK depends on it — protected by construction.
-      - **Migration 006 is PENDING on Aiven** — see Production state above.
+      - **Migration 006 is applied on Aiven** (2026-08-24) — see Production
+        state above.
 - [ ] **5.2** `GET /api/notifications` + mark-read endpoint. Bell icon with
       unread count in the patient app, polling every 30s.
 - [ ] **5.3** `tools/joinWaitlist.js` — the only write tool. Requires explicit
