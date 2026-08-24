@@ -656,10 +656,26 @@ things only a live model can show.
         produces exactly that cross-contamination.
       - The database connects lazily on first tool call, so a `connectDB`
         retry window never looks to the host like a server that won't start.
-- [ ] **4.4** `mcp/README.md` with Claude Desktop setup instructions.
+- [x] **4.4** `mcp/README.md` with Claude Desktop setup instructions.
+      - Written, then **corrected against a live setup** rather than assumed.
+        Three things only the real run could establish: the Microsoft Store
+        (MSIX) build sandboxes its config to
+        `%LOCALAPPDATA%\Packages\Claude_<id>\LocalCache\Roaming\Claude\`, so
+        the commonly quoted `%APPDATA%\Claude\` path edits a file the app never
+        reads — the README now leads with **Settings → Edit Config**, which is
+        install-agnostic; closing the window does not reload the config, only a
+        **tray quit** does; and Claude Desktop re-prompts for tool permission
+        in each new conversation, because "Allow always" is scoped to the
+        current chat.
 
 **Done when:** you can open Claude Desktop, ask about your doctors, and get real
-answers from your database.
+answers from your database. — **DONE.**
+Verified live against a Microsoft Store install: the six patient tools appear
+as `prescripto-patient` and answer from the local database. Phase 1's claim
+held — exposing the tools over a second transport was a loop over the existing
+registry, not a rewrite. Identity comes from a token file re-read on every
+call, so it follows the token rather than the process; every call still goes
+through `runTool`, so rule 8's audit row is unavoidable on this transport too.
 
 ---
 
