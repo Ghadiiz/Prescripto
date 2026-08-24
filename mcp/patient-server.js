@@ -16,6 +16,7 @@ import { StdioServerTransport } from '@modelcontextprotocol/server/stdio';
 // rewriting tools; this is where that gets tested.
 import { tools } from '../backend/src/assistant/tools/index.js';
 import { describeAuth } from './context.js';
+import { callTool, sessionId } from './callTool.js';
 
 const NAME = 'prescripto-patient';
 const VERSION = '1.0.0';
@@ -54,11 +55,33 @@ export const assertPatientRegistry = (registry) => {
 export const createServer = () => {
   assertPatientRegistry(tools);
 
-  // Tools are REGISTERED in 4.3 and identity arrives in 4.2. Until then this
-  // server advertises nothing, which is the honest answer for a scaffold — a
-  // `tools/list` that returned names it could not actually run would be worse
-  // than an empty one.
-  return new McpServer({ name: NAME, version: VERSION });
+  const server = new McpServer({ name: NAME, version: VERSION });
+
+  // This loop is the increment.
+  //
+  // Phase 1 claimed that tools calling the service layer directly, with
+  // identity from ctx, would make a second transport a matter of writing a
+  // server rather than rewriting tools. Six registrations with no adapter, no
+  // schema conversion and no per-tool special casing is what that claim looks
+  // like when it holds.
+  //
+  // `tool.schema` is passed straight through. mcp/ and backend/ have separate
+  // zod copies — verified NOT the same instance — but the SDK types against
+  // the structural `~standard` interface, so the backend's schemas are
+  // accepted as-is and emitted as JSON Schema in tools/list. Notably NOT
+  // buildToolDefinitions(): its keyword stripping exists for a function-calling
+  // API's quirks and would only lose fidelity here.
+  for (const tool of tools) {
+    server.registerTool(
+      tool.name,
+      { description: tool.description, inputSchema: tool.schema },
+      // Every call goes through callTool, which means through runTool, which
+      // means an audit row. No tool's handler is reachable from here.
+      (args) => callTool(tool.name, args),
+    );
+  }
+
+  return server;
 };
 
 const main = async () => {
@@ -74,7 +97,7 @@ const main = async () => {
   // from the tool call itself.
   console.error(
     `${NAME} v${VERSION} ready on stdio — ` +
-      `${tools.length} patient tool(s) available to register in 4.3; ` +
+      `${tools.length} patient tool(s) registered; session ${sessionId}; ` +
       `${describeAuth()}.`,
   );
 

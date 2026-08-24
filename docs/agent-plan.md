@@ -92,6 +92,22 @@ not lost; none blocks the current phase.
   transparently); **6.1** is the natural home, since it already reworks this
   layer for Redis. *Found during 1.7.*
 
+- **Over MCP, a malformed tool call produces no audit row.** The SDK's
+  `validateToolInput` throws a `ProtocolError` when arguments fail the tool's
+  zod schema, *before* the registered handler runs — so `runTool`, and the
+  audit row rule 8 requires, never execute. 1.7 deliberately logs rejected
+  calls with `args: null` ("either a model error or someone probing"), and that
+  record is missing on this transport.
+
+  Accepted rather than worked around, because it matches HTTP: the chat
+  endpoint's `.strict()` body schema also returns 400 with no audit row, so
+  input rejected before any tool runs is already un-audited on both sides. The
+  alternatives were worse — dropping `inputSchema` would leave the model with
+  no argument hints, and advertising a permissive schema would make `tools/list`
+  lie about what the tools accept. Note that the rejection is itself a
+  guardrail: `.strict()` is what stops a smuggled `user_id` reaching a tool.
+  *Found during 4.3.*
+
 - **The booking page offers slots for doctors who are not accepting.**
   `Appointment.jsx` never reads `docInfo.available`, and `GET
   /api/doctors/:id` returns a doctor regardless of the flag (unlike `GET
@@ -626,7 +642,20 @@ things only a live model can show.
       - `mcp/env.js` loads `backend/.env` by a path derived from
         `import.meta.url`, because `dotenv.config()` resolves against
         `process.cwd()` and the host chooses the cwd.
-- [ ] **4.3** Register the patient tools, reusing the same zod schemas.
+- [x] **4.3** Register the patient tools, reusing the same zod schemas.
+      - Phase 1's claim held: registration is a plain loop over the existing
+        registry — no adapter, no schema conversion, no per-tool special
+        casing. `mcp/` and `backend/` have **separate zod instances** (verified
+        not identical), but the SDK types against the structural `~standard`
+        interface, so the backend's schemas register as-is and emit real JSON
+        Schema in `tools/list`.
+      - Every call goes through `runTool`, never `tool.handler`, so rule 8's
+        audit row is unavoidable. `ctx` is rebuilt **per call** from the token
+        file, which is what stops a long-lived server serving one patient's
+        data under another's identity — a mutation caching it at startup
+        produces exactly that cross-contamination.
+      - The database connects lazily on first tool call, so a `connectDB`
+        retry window never looks to the host like a server that won't start.
 - [ ] **4.4** `mcp/README.md` with Claude Desktop setup instructions.
 
 **Done when:** you can open Claude Desktop, ask about your doctors, and get real
