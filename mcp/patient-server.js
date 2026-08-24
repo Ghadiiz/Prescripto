@@ -1,5 +1,8 @@
 // MUST be the first import. See stdioGuard.js for why the ordering matters.
 import './stdioGuard.js';
+// Second, and before any backend import: the backend cannot be loaded
+// before its env exists. See env.js.
+import './env.js';
 
 import { pathToFileURL } from 'node:url';
 
@@ -12,6 +15,7 @@ import { StdioServerTransport } from '@modelcontextprotocol/server/stdio';
 // built on the claim that a second transport would mean writing a server, not
 // rewriting tools; this is where that gets tested.
 import { tools } from '../backend/src/assistant/tools/index.js';
+import { describeAuth } from './context.js';
 
 const NAME = 'prescripto-patient';
 const VERSION = '1.0.0';
@@ -64,9 +68,14 @@ const main = async () => {
   await server.connect(transport);
 
   // stderr, via the guard — the MCP host surfaces this in its server logs.
+  // Status, not a gate. A missing or expired token must not stop the server
+  // booting: a host shows a refusing server as a dead entry with nothing
+  // explaining why, whereas a running server can return an actionable error
+  // from the tool call itself.
   console.error(
     `${NAME} v${VERSION} ready on stdio — ` +
-      `${tools.length} patient tool(s) available to register in 4.3.`,
+      `${tools.length} patient tool(s) available to register in 4.3; ` +
+      `${describeAuth()}.`,
   );
 
   const shutdown = async () => {

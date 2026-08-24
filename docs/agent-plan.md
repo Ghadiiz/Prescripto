@@ -614,7 +614,18 @@ things only a live model can show.
         `pkce-challenge`, an HTTP and OAuth stack a stdio server never runs.
       - *`mcp/` is its own npm root*, so CLAUDE.md's npm-roots line now lists
         four directories.
-- [ ] **4.2** Auth: how a JWT reaches the server and becomes `ctx`.
+- [x] **4.2** Auth: how a JWT reaches the server and becomes `ctx`.
+      - A stdio server has no request to read a header from, so the token comes
+        from a file named by `PRESCRIPTO_TOKEN_FILE`, **re-read on every call**
+        (patient tokens expire after 7 days; refreshing is one file write, no
+        config edit and no restart).
+      - Both transports now share one verified root of trust,
+        `backend/src/auth/verifyPatientToken.js`, which returns the **ctx
+        itself** rather than a decoded payload — so no caller decides what
+        identity means. `authMiddleware` only maps its outcomes to statuses.
+      - `mcp/env.js` loads `backend/.env` by a path derived from
+        `import.meta.url`, because `dotenv.config()` resolves against
+        `process.cwd()` and the host chooses the cwd.
 - [ ] **4.3** Register the patient tools, reusing the same zod schemas.
 - [ ] **4.4** `mcp/README.md` with Claude Desktop setup instructions.
 
