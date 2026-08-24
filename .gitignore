@@ -7,3 +7,4 @@ aiven-pre-005.sql
 # permissions, and launch.json is dev-server config a solo repo has no reason
 # to share.
 .claude/
+aiven-pre-006.sql
