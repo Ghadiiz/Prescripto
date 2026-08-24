@@ -54,7 +54,20 @@ and keys.
 
   `conversations` on Aiven is **empty and stays empty until 2.7's endpoint
   writes to it** — as is `assistant_audit_log`, since nothing calls `runTool`
-  in production yet.
+  in production yet. *(Both now receive writes: `main` deploys as of the Phase 4
+  merge.)*
+
+- **006_notifications_waitlist.sql** — **PENDING on Aiven.** Applied locally
+  2026-08-24. Creates `waitlist` and `notifications`.
+
+  Lower urgency than 003 and 005 were, because nothing in production reads or
+  writes these tables until 5.2's endpoint and 5.3's tool ship — an un-applied
+  006 is invisible until then rather than an immediate 500. It must be applied
+  **before** those increments reach `main`, though, and `main` now deploys on
+  push.
+
+  Both tables are new and empty, so there is nothing for the constraints to
+  reject on the way in: no duplicate pre-check is needed, unlike 005.
 
 `npm run seed` must never run against Aiven — it opens with `DELETE FROM` on all
 four tables. Since 0.7 this is enforced rather than trusted: `database/seed.js`
@@ -720,9 +733,26 @@ generated from constants. This is a deliberate scope decision for a
 demonstration project — no `doctor_schedules` table, and slot generation is
 not touched.
 
-- [ ] **5.1** Migration: `notifications` (id, user_id, type, payload JSON,
+- [x] **5.1** Migration: `notifications` (id, user_id, type, payload JSON,
       read_at, created_at) and `waitlist` (id, user_id, doctor_id, date_from,
       date_to, status, created_at).
+      - **Duplicates are a database guarantee, not tool logic.** `waitlist`
+        copies `appointments.active_slot`: a generated column that goes NULL
+        when `status = 'cancelled'`, plus a unique index. So 5.3's write tool
+        gets `ER_DUP_ENTRY` on a repeat join instead of needing a read-then-
+        write check with a race in it. `'notified'` still holds the slot —
+        only cancelling releases it.
+      - `notifications` is **patient-only with a real FK** to `users` and
+        CASCADE, unlike the role-carrying `assistant_audit_log` and
+        `conversations` (see 003's identity note). Doctor notifications would
+        be a migration; referential integrity today was worth more than an
+        unused column.
+      - Also: `CHECK (date_to >= date_from)`, `idx_match` for 5.4's
+        cancellation lookup, and `read_at NULL` as the unread marker.
+      - Every constraint mutation-tested against the live schema. One could not
+        be broken at all: `idx_unread` is refused with `ER_DROP_INDEX_FK`
+        because the FK depends on it — protected by construction.
+      - **Migration 006 is PENDING on Aiven** — see Production state above.
 - [ ] **5.2** `GET /api/notifications` + mark-read endpoint. Bell icon with
       unread count in the patient app, polling every 30s.
 - [ ] **5.3** `tools/joinWaitlist.js` — the only write tool. Requires explicit
