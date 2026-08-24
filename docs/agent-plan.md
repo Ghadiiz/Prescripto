@@ -171,6 +171,18 @@ not lost; none blocks the current phase.
   and the fix is a product decision (hide the picker? show a notice? 404?)
   rather than a mechanical one. *Found during 3.4.*
 
+- **The notification poll's natural-visibility path is unverified.** The bell
+  pauses polling while the tab is hidden and resumes on return. The *hidden*
+  half was observed for real — 109 seconds hidden produced zero polls — but the
+  Browser pane could not be brought to a visible state through the tooling, so
+  the resume was verified by overriding `document.hidden` and dispatching
+  `visibilitychange` by hand. That exercises the handler (polls then fired at
+  +0s and +30s, exactly as designed) but not the browser's own event.
+
+  Low risk — `visibilitychange` is the documented API and the handler is a few
+  lines — but worth a glance in a real browser tab when convenient. *Found
+  during 5.2.*
+
 - **`frontend/` has no test runner, so UI guarantees rest on discipline.** The
   backend has 129 tests and a mutation-testing habit; the patient app has
   `eslint` and nothing else. That matters most for **rule 7**: the checked-at
@@ -757,8 +769,21 @@ not touched.
         because the FK depends on it — protected by construction.
       - **Migration 006 is applied on Aiven** (2026-08-24) — see Production
         state above.
-- [ ] **5.2** `GET /api/notifications` + mark-read endpoint. Bell icon with
+- [x] **5.2** `GET /api/notifications` + mark-read endpoint. Bell icon with
       unread count in the patient app, polling every 30s.
+      - **Ownership lives in the WHERE clause**, not in a check the caller
+        performs first: `UPDATE … WHERE id = ? AND user_id = ? AND read_at IS
+        NULL`. No gap between check and write, no code path where the
+        comparison could be forgotten, and no existence leak — a wrong id,
+        another patient's id and an already-read one all return the same 200
+        with the caller's own unread count, where a 404-vs-403 split would
+        confirm which ids exist.
+      - Four endpoints, all patient-only. The 30s timer hits a **count-only**
+        endpoint (a count over `idx_unread`); the list is fetched when the bell
+        is opened, not 2,880 times a day per tab. Polling also pauses while the
+        tab is hidden.
+      - The model never selects `user_id` — a column that never ships cannot
+        leak.
 - [ ] **5.3** `tools/joinWaitlist.js` — the only write tool. Requires explicit
       confirmation in the conversation before writing.
 - [ ] **5.4** Hook into the cancel path where `active_slot` goes NULL: match
