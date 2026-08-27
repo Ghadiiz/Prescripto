@@ -2,35 +2,10 @@ import { z } from 'zod';
 import * as appointmentService from '../../appointments/services/appointmentService.js';
 import { getDoctorById } from '../models/doctorQueries.js';
 import { sanitizeAdminText } from '../guardrails/sanitize.js';
+import { toDateString, addDays, isBeforeToday } from './dates.js';
 
 const MAX_DAYS = 7;
 
-// Local-date helpers. Slots are generated against the server's clock in
-// appointmentService, so date comparisons here use local time too — using UTC
-// would disagree with the service by up to a day near midnight.
-const toDateString = (date) => {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const day = String(date.getDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
-};
-
-const addDays = (dateString, offset) => {
-  const [year, month, day] = dateString.split('-').map(Number);
-  const date = new Date(year, month - 1, day);
-  date.setDate(date.getDate() + offset);
-  return date;
-};
-
-const isBeforeToday = (dateString) => {
-  const [year, month, day] = dateString.split('-').map(Number);
-  const date = new Date(year, month - 1, day);
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  return date < today;
-};
-
-// `doctor_id` names another party, not the caller — not an identity key.
 const schema = z
   .object({
     doctor_id: z.number().int().positive(),

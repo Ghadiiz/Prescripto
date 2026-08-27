@@ -14,7 +14,7 @@ import { StdioServerTransport } from '@modelcontextprotocol/server/stdio';
 // does, rather than making HTTP requests back to our own API. Phase 1 was
 // built on the claim that a second transport would mean writing a server, not
 // rewriting tools; this is where that gets tested.
-import { tools } from '../backend/src/assistant/tools/index.js';
+import { tools, readOnlyTools } from '../backend/src/assistant/tools/index.js';
 import { describeAuth } from './context.js';
 import { callTool, sessionId } from './callTool.js';
 
@@ -71,7 +71,7 @@ export const createServer = () => {
   // accepted as-is and emitted as JSON Schema in tools/list. Notably NOT
   // buildToolDefinitions(): its keyword stripping exists for a function-calling
   // API's quirks and would only lose fidelity here.
-  for (const tool of tools) {
+  for (const tool of readOnlyTools) {
     server.registerTool(
       tool.name,
       { description: tool.description, inputSchema: tool.schema },
@@ -97,7 +97,7 @@ const main = async () => {
   // from the tool call itself.
   console.error(
     `${NAME} v${VERSION} ready on stdio — ` +
-      `${tools.length} patient tool(s) registered; session ${sessionId}; ` +
+      `${readOnlyTools.length} read-only patient tool(s) registered; session ${sessionId}; ` +
       `${describeAuth()}.`,
   );
 

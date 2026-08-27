@@ -41,7 +41,7 @@ export const logToolCall = async ({
 
   for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt += 1) {
     try {
-      await db.query(
+      const [result] = await db.query(
         `INSERT INTO assistant_audit_log
           (session_id, user_id, role, tool_name, arguments, result_count)
          VALUES (?, ?, ?, ?, CAST(? AS JSON), ?)`,
@@ -54,7 +54,9 @@ export const logToolCall = async ({
           resultCount,
         ],
       );
-      return;
+      // The id is returned so a WRITE tool can log before it acts and fill in
+      // the outcome afterwards — see runTool.
+      return result.insertId;
     } catch (error) {
       // A missing or malformed audit table is a misconfiguration. Surface it
       // immediately rather than retrying into the same wall.
@@ -68,5 +70,29 @@ export const logToolCall = async ({
 
       await sleep(RETRY_DELAY_MS * attempt);
     }
+  }
+};
+
+// Completes the row a mutating tool logged before it ran.
+//
+// Deliberately does NOT throw. By the time this is called the write has
+// already happened, and failing the tool call now would tell the caller
+// nothing happened when something did — the worst possible lie. A row left
+// with a NULL result_count still records that the call was made, which is what
+// rule 8 requires; the console line is how anyone notices.
+export const recordToolOutcome = async (auditId, resultCount) => {
+  if (!auditId) return;
+
+  try {
+    const db = getDB();
+    await db.query(
+      'UPDATE assistant_audit_log SET result_count = ? WHERE id = ?',
+      [resultCount, auditId],
+    );
+  } catch (error) {
+    console.error(
+      `AUDIT OUTCOME UPDATE FAILED for row ${auditId}: ${error.message}. ` +
+        'The call is still recorded, with result_count NULL.',
+    );
   }
 };

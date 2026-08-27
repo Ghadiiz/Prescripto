@@ -19,6 +19,7 @@ import listSpecialities from './listSpecialities.js';
 import checkAvailability from './checkAvailability.js';
 import suggestSpeciality from './suggestSpeciality.js';
 import myAppointments from './myAppointments.js';
+import joinWaitlist from './joinWaitlist.js';
 
 export const tools = [
   searchDoctors,
@@ -27,6 +28,16 @@ export const tools = [
   checkAvailability,
   suggestSpeciality,
   myAppointments,
+  // THE ONLY WRITE TOOL (rule 2's single exception). Everything above is
+  // read-only. Adding another `mutates: true` tool here means changing rule 2,
+  // and the 1.8 guardrail suite will fail until someone does so deliberately.
+  joinWaitlist,
 ];
+
+// The read-only subset. mcp/patient-server.js registers THIS, not `tools`:
+// over MCP the host drives the model, so the system prompt and agent loop that
+// gate the write do not apply, and 4.4 measured hosts widening tool calls
+// unprompted. A widened search is harmless; a widened write leaves a row.
+export const readOnlyTools = tools.filter((tool) => !tool.mutates);
 
 export const getTool = (name) => tools.find((tool) => tool.name === name);

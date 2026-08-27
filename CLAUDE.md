@@ -141,9 +141,21 @@ convenience, and flag it explicitly if a task seems to require breaking one.
 Every tool has the same signature:
 
 ```js
-async function toolName(ctx, args) { ... }
+async function toolName(ctx, args, { sessionId }) { ... }
 // ctx  = { userId, role } — built by our middleware from the verified JWT
 // args = model-supplied, validated against a zod schema before use
+// third argument = call metadata from runTool. Additive: every read tool
+//   ignores it. join_waitlist uses sessionId to bind its confirmation token
+//   to the conversation the patient agreed in.
+```
+
+Each tool is a descriptor, not a bare function:
+
+```js
+{ name, description, schema, mutates, handler }
+// mutates = whether the tool writes. Every tool must declare it explicitly.
+//   join_waitlist is the ONLY `true`, per rule 2, and the 1.8 guardrail suite
+//   fails if a second one appears.
 ```
 
 ## LLM provider

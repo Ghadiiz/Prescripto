@@ -5,6 +5,7 @@ import { connectDB, getDB } from '../src/config/mysql.js';
 import { runConversation, MAX_ITERATIONS } from '../src/assistant/agentLoop.js';
 import { resetBudget } from '../src/assistant/agentService.js';
 import { buildToolDefinitions } from '../src/assistant/toolDefinitions.js';
+import { tools } from '../src/assistant/tools/index.js';
 
 // The provider is stubbed at the fetch layer, so the real agentService mapping
 // is exercised too — only the network is fake. Tools run against the real
@@ -260,7 +261,9 @@ test('tool definitions carry no keywords the provider rejects', () => {
   const definitions = buildToolDefinitions();
   const serialised = JSON.stringify(definitions);
 
-  assert.equal(definitions.length, 6);
+  // Tied to the registry rather than a literal, so adding a tool does not
+  // silently narrow what this checks (it was 6 until 5.3 added join_waitlist).
+  assert.equal(definitions.length, tools.length);
   for (const keyword of ['$schema', 'additionalProperties', 'exclusiveMinimum']) {
     assert.ok(
       !serialised.includes(keyword),

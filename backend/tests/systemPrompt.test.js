@@ -15,10 +15,31 @@ import { tools } from '../src/assistant/tools/index.js';
 const flatten = (text) => text.replace(/\s+/g, ' ');
 const prompt = flatten(buildSystemPrompt());
 
-test('the prompt states it can only read, and never books', () => {
-  assert.match(prompt, /only read information/i);
+test('the prompt states it never books, and says where booking happens', () => {
+  // This used to assert "only read information". 5.3 made that claim untrue —
+  // the assistant now has exactly one write — so the assertion was changed
+  // deliberately rather than the prompt being bent to keep it passing. What
+  // has to survive is the specific commitment, not the blanket one.
   assert.match(prompt, /cannot book, change, move or cancel/i);
   assert.match(prompt, /booking page/i, 'it must say where booking happens');
+});
+
+test('the waitlist carve-out does not become permission to book', () => {
+  // 5.3 gives the assistant its one write. The risk in wording it is that
+  // "you can do X" erodes the much larger "you cannot book" it sits next to.
+  assert.match(prompt, /cannot book, change, move or cancel/i);
+  assert.match(prompt, /one thing you can change, and it is not a booking/i);
+  assert.match(prompt, /reserves nothing and books nothing/i);
+
+  // And that it is gated on the patient actually agreeing, in two steps.
+  assert.match(prompt, /never do that without asking first/i);
+  assert.match(prompt, /two steps/i);
+  assert.match(prompt, /wait for them to actually agree/i);
+  assert.match(prompt, /never treat a question about availability/i);
+
+  // Without naming the tool: the enumeration test below is not a formality,
+  // and the tool's own description already carries the mechanics.
+  assert.ok(!prompt.includes('join_waitlist'));
 });
 
 test('the prompt forbids diagnosis and medical advice', () => {

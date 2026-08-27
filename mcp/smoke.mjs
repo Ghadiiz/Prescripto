@@ -155,6 +155,10 @@ try {
   const advertised = list.result?.tools ?? [];
   results.toolsList = {
     count: advertised.length,
+    // 5.3 added join_waitlist, the one write tool. It must NOT be here: over
+    // MCP the host drives the model, so the prompt and loop that gate the
+    // write do not apply, and 4.4 measured hosts widening calls unprompted.
+    writeToolExposed: advertised.some((t) => t.name === 'join_waitlist'),
     names: advertised.map((t) => t.name).sort(),
     allHaveSchemas: advertised.every(
       (t) => t.inputSchema && typeof t.inputSchema === 'object',
@@ -241,7 +245,7 @@ try {
 const stderr = stderrChunks.join('');
 results.childAuth = {
   authenticatedAsPatient: stderr.includes(`authenticated as patient #${patientA}`),
-  registered: /\d+ patient tool\(s\) registered/.test(stderr),
+  registered: /\d+ read-only patient tool\(s\) registered/.test(stderr),
 };
 
 const unparseable = stdoutLines.filter((line) => {
@@ -308,6 +312,7 @@ passed =
   results.childAuth.authenticatedAsPatient &&
   results.childAuth.registered &&
   results.toolsList.count === 6 &&
+  results.toolsList.writeToolExposed === false &&
   results.toolsList.allHaveSchemas &&
   results.listSpecialities.count === 6 &&
   results.identity.differentResults &&

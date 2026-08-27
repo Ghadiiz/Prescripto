@@ -367,10 +367,20 @@ const mocked = [
       );
 
       // Rule 2, checked at the boundary the model actually sees.
-      assert.equal(
-        tools.filter((t) => t.mutates).length,
-        0,
-        'no write tool may be advertised to the model',
+      //
+      // Changed deliberately in 5.3. This used to require zero write tools;
+      // that is no longer the intent — over OUR loop the assistant is meant to
+      // reach join_waitlist, gated by the system prompt and the two-phase
+      // confirmation. What must stay true is that it is the ONLY one.
+      //
+      // The MCP boundary is different and stricter: there the host drives the
+      // model, so no write tool is advertised at all. That is asserted
+      // separately, in guardrails.test.js and mcp/smoke.mjs.
+      const writeTools = tools.filter((t) => t.mutates).map((t) => t.name);
+      assert.deepEqual(
+        writeTools,
+        ['join_waitlist'],
+        `expected join_waitlist alone to be a write tool, found [${writeTools}]`,
       );
     },
   },

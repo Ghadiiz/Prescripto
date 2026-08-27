@@ -2,7 +2,7 @@ import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 
 import { connectDB, getDB } from '../src/config/mysql.js';
-import { tools, getTool } from '../src/assistant/tools/index.js';
+import { tools, readOnlyTools, getTool } from '../src/assistant/tools/index.js';
 import { runTool } from '../src/assistant/runTool.js';
 import { listSpecialityKeywords } from '../src/assistant/models/specialityQueries.js';
 
@@ -110,6 +110,16 @@ before(async () => {
     check_availability: { doctor_id: doctor.id, date: tomorrow() },
     suggest_speciality: { term: 'rash' },
     my_appointments: { status: 'all' },
+    // The write tool, called in its PREVIEW phase — no confirmation_token, so
+    // it returns the summary and writes nothing. That is the right call here:
+    // this suite asserts no tool result carries a banned field, and the
+    // preview's summary is a tool result like any other. The write path gets
+    // its own suite in joinWaitlist.test.js.
+    join_waitlist: {
+      doctor_id: doctor.id,
+      date_from: tomorrow(),
+      date_to: tomorrow(),
+    },
   };
 });
 
@@ -159,16 +169,39 @@ test('rule 4: no tool result contains a banned field', async () => {
   }
 });
 
-test('rule 2: the registry contains no write tool', () => {
+test('rule 2: join_waitlist is the ONLY write tool', () => {
+  // Changed deliberately in 5.3, as the previous version of this test
+  // instructed. It is strictly stronger than what it replaced: that one only
+  // counted zero write tools, this one names the single permitted exception,
+  // so a second write tool fails here even though it would also have failed
+  // the old assertion.
+  const writeTools = tools.filter((tool) => tool.mutates).map((tool) => tool.name);
+
+  assert.deepEqual(
+    writeTools,
+    ['join_waitlist'],
+    `expected join_waitlist alone to write, found [${writeTools}] — rule 2 ` +
+      'permits exactly one exception and adding another means changing the rule.',
+  );
+
   for (const tool of tools) {
     assert.equal(
-      tool.mutates,
-      false,
-      `${tool.name} declares mutates:${tool.mutates} — no tool may write. ` +
-        'join_waitlist (5.3) is the only planned exception and this test must ' +
-        'be changed deliberately when it lands.',
+      typeof tool.mutates,
+      'boolean',
+      `${tool.name} must declare mutates explicitly`,
     );
   }
+});
+
+test('rule 2: the MCP surface stays read-only', () => {
+  // Over MCP the host drives the model, so nothing on our side gates the
+  // write. readOnlyTools is what mcp/patient-server.js registers.
+  assert.equal(readOnlyTools.length, tools.length - 1);
+  assert.ok(
+    readOnlyTools.every((tool) => !tool.mutates),
+    'a write tool reached the MCP registry',
+  );
+  assert.ok(!readOnlyTools.some((tool) => tool.name === 'join_waitlist'));
 });
 
 test('rule 5: instruction-like admin text is truncated, stripped and labelled', async () => {

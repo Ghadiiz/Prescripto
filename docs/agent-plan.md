@@ -784,8 +784,31 @@ not touched.
         tab is hidden.
       - The model never selects `user_id` — a column that never ships cannot
         leak.
-- [ ] **5.3** `tools/joinWaitlist.js` — the only write tool. Requires explicit
+- [x] **5.3** `tools/joinWaitlist.js` — the only write tool. Requires explicit
       confirmation in the conversation before writing.
+      - **The confirmation is structural, not prompted.** A first call writes
+        nothing and returns a single-use token bound to the session, the
+        patient (`ctx.userId`), and the exact arguments, expiring in 10
+        minutes. Only a second call carrying a matching token writes, so a
+        single call can never write whatever the model decides.
+        - *Honest limit, recorded in `confirmations.js`:* this guarantees two
+          phases, **not** that a human was asked — the server cannot see the
+          patient. The system prompt and agent loop are what turn the gap into
+          a real question, which is exactly why the tool is **not exposed over
+          MCP**, where the host drives the model.
+      - `user_id` is written from `ctx`, never from arguments; the `.strict()`
+        schema rejects a smuggled one before the handler runs.
+      - Duplicates stay a **database** guarantee: 006's `unique_active_request`
+        yields `ER_DUP_ENTRY`, reported as `already_waiting` rather than raced
+        against with a pre-check.
+      - **`runTool` now logs BEFORE a write** and fills in the outcome after,
+        as its own comment had required since 1.7. A crash mid-write leaves a
+        row with `result_count: null` — "attempted, outcome unknown" — instead
+        of a change with no audit trail.
+      - Two guardrails changed **deliberately**, both getting stronger: the 1.8
+        rule-2 test now names `join_waitlist` as the sole permitted write
+        (a second one fails), and the system prompt's blanket "you can only
+        read information" became the specific commitment that still holds.
 - [ ] **5.4** Hook into the cancel path where `active_slot` goes NULL: match
       waitlist rows, insert notification rows.
 - [ ] **5.5** Doctor tools: `mySchedule`, `scheduleGaps`,
