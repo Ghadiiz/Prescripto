@@ -2,6 +2,7 @@ import * as appointmentModel from '../models/appointmentModel.js';
 import { APPOINTMENT_STATUS } from '../../constants/appointmentStatus.js';
 import { AppError } from '../../utils/AppError.js';
 import { getDB } from '../../config/mysql.js';
+import { notifyWaitlistSafely } from '../../notifications/services/waitlistNotifier.js';
 
 const convertTo12Hour = (time24h) => {
   const [hours, minutes] = time24h.split(':');
@@ -182,6 +183,18 @@ const cancelAppointment = async (
   if (!success) {
     throw new Error('Failed to cancel appointment');
   }
+
+  // The slot is now free: active_slot has gone NULL, so anyone whose waitlist
+  // window covers this date should hear about it (5.4).
+  //
+  // Deliberately after the cancellation has committed, and deliberately
+  // unable to throw — see notifyWaitlistSafely. `excludeUserId` is this
+  // patient, who freed the slot on purpose and does not need telling.
+  await notifyWaitlistSafely({
+    doctorId: appointment.doctor_id,
+    date: appointment.appointment_date,
+    excludeUserId: userId,
+  });
 
   return { message: 'Appointment cancelled successfully' };
 };

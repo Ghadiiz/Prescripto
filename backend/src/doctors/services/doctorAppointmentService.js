@@ -1,6 +1,7 @@
 import { getDB } from '../../config/mysql.js';
 import { APPOINTMENT_STATUS } from '../../constants/appointmentStatus.js';
 import { AppError } from '../../utils/AppError.js';
+import { notifyWaitlistSafely } from '../../notifications/services/waitlistNotifier.js';
 
 export const getDoctorAppointments = async (doctorId, status = null) => {
   const db = getDB();
@@ -108,6 +109,17 @@ export const cancelAppointment = async (appointmentId, doctorId) => {
     APPOINTMENT_STATUS.CANCELLED,
     appointmentId,
   ]);
+
+  // The other cancel path (5.4). A doctor cancelling is arguably the more
+  // likely reason a slot opens, so hooking only the patient service would
+  // leave the common case silent.
+  //
+  // No excludeUserId: the doctor is not a patient, and the patient whose
+  // appointment this was may well want the next opening.
+  await notifyWaitlistSafely({
+    doctorId: appointment.doctor_id,
+    date: appointment.appointment_date,
+  });
 
   return true;
 };

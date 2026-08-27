@@ -108,6 +108,17 @@ not lost; none blocks the current phase.
   transparently); **6.1** is the natural home, since it already reworks this
   layer for Redis. *Found during 1.7.*
 
+- **The `EXPLAIN` test does not pin the model to the query it explains.**
+  `waitlistNotifier.test.js`'s test 13 runs its own copy of the waitlist match
+  SQL and asserts the planner picks `idx_match`, which proves the index still
+  serves that *shape* — not that `waitlistMatchModel.js` still emits it. A
+  mutation dropping `status = 'active'` from the model failed the behavioural
+  tests (4 and 5), not this one, so correctness is pinned; only the performance
+  assertion is loose. Making it exact would mean exporting the SQL string for
+  the test to read, which was **deliberately not done** — a query exported
+  solely for a test invites callers the model layer did not intend.
+  *Found during 5.4.*
+
 - **Over MCP, a malformed tool call produces no audit row.** The SDK's
   `validateToolInput` throws a `ProtocolError` when arguments fail the tool's
   zod schema, *before* the registered handler runs — so `runTool`, and the
@@ -809,8 +820,26 @@ not touched.
         rule-2 test now names `join_waitlist` as the sole permitted write
         (a second one fails), and the system prompt's blanket "you can only
         read information" became the specific commitment that still holds.
-- [ ] **5.4** Hook into the cancel path where `active_slot` goes NULL: match
+- [x] **5.4** Hook into the cancel path where `active_slot` goes NULL: match
       waitlist rows, insert notification rows.
+      - **There are two cancel paths, not one.** The patient's service and the
+        doctor's share no model function, so both are hooked. The mutation that
+        removed only the doctor hook still passed 13 of 14 tests — a
+        single-path implementation would have looked green, and a doctor
+        cancelling is arguably the *more* common reason a slot opens.
+      - **A notification failure cannot fail a cancellation.** By the time the
+        notifier runs the cancellation has already committed; throwing would
+        report failure for something that succeeded and invite a second cancel
+        attempt. The cost, stated rather than hidden: that notification is
+        **lost**, with a console line as its only trace. Acceptable because the
+        waitlist row survives — 6.2's job queue is where this becomes durable.
+      - **The waitlist row stays `active` after notifying**, so a patient who
+        misses this slot still hears about the next one. Dedupe is per freed
+        date, not per row: overlapping windows for one patient produce one
+        notification, and an unread notice for the same doctor and date is not
+        stacked.
+      - Matching is scoped to `active` rows whose window covers the freed date,
+        excluding the patient who cancelled and any date already past.
 - [ ] **5.5** Doctor tools: `mySchedule`, `scheduleGaps`,
       `patientsNeedingFollowup`, `myStats`. `scheduleGaps` computes free blocks
       against the existing fixed hours — no schema change needed.

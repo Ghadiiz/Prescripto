@@ -93,3 +93,16 @@ export const markAllNotificationsRead = async (userId) => {
 
   return result.affectedRows;
 };
+
+// The write side. Called by the waitlist notifier (5.4), never by a request
+// handler — a patient cannot create their own notifications.
+export const insertNotification = async (userId, type, payload) => {
+  const db = getDB();
+
+  const [result] = await db.query(
+    'INSERT INTO notifications (user_id, type, payload) VALUES (?, ?, CAST(? AS JSON))',
+    [userId, type, JSON.stringify(payload ?? null)],
+  );
+
+  return result.insertId;
+};
