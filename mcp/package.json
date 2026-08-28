@@ -6,7 +6,10 @@
   "description": "MCP servers exposing the Prescripto assistant tools over stdio.",
   "scripts": {
     "start": "node patient-server.js",
-    "smoke": "node smoke.mjs"
+    "start:doctor": "node doctor-server.js",
+    "smoke": "node smoke.mjs && node doctor-smoke.mjs",
+    "smoke:patient": "node smoke.mjs",
+    "smoke:doctor": "node doctor-smoke.mjs"
   },
   "dependencies": {
     "@modelcontextprotocol/server": "^2.0.0",

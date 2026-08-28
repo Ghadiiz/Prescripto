@@ -108,20 +108,27 @@ not lost; none blocks the current phase.
   transparently); **6.1** is the natural home, since it already reworks this
   layer for Redis. *Found during 1.7.*
 
-- **`doctorAuthMiddleware` cannot tell a misconfigured server from a forged
-  token.** It calls `jwt.verify(token, process.env.JWT_SECRET)` with no check
-  that the secret exists. With `JWT_SECRET` unset, jsonwebtoken throws
+- **RESOLVED in 5.6 — `doctorAuthMiddleware` could not tell a misconfigured
+  server from a forged token.** It called `jwt.verify(token,
+  process.env.JWT_SECRET)` with no check that the secret exists. With `JWT_SECRET` unset, jsonwebtoken throws
   `JsonWebTokenError` — the same class a bad signature produces — so the
   doctor is told "Invalid token" and someone spends an afternoon on the wrong
   problem. Exactly the confusion 4.2 fixed for patients by checking the secret
   BEFORE `jwt.verify` in `verifyPatientToken.js`, with a distinct
   `misconfigured` code that maps to a 500 rather than a 401.
 
-  **5.6 is where this gets fixed**, because that increment needs a
-  `verifyDoctorToken` anyway — the doctor MCP server has no request to read a
-  header from and must reach the same answer the HTTP middleware does. Left
-  alone here rather than rewiring the doctor panel's live auth path in an
-  increment about tools. *Found during 5.5.*
+  **Fixed in 5.6**, as predicted: that increment needed a `verifyDoctorToken`
+  anyway — the doctor MCP server has no request to read a header from and must
+  reach the same answer the HTTP middleware does. The secret is now checked
+  before `jwt.verify`, `misconfigured` has no entry in the middleware's status
+  map so it falls through to a 500, and two tests pin it: the code is
+  `misconfigured` rather than `invalid`, and the response must not mention the
+  token. Removing the check fails both. *Found during 5.5, fixed in 5.6.*
+
+  **Still open elsewhere:** `adminAuthMiddleware.js` has the same shape —
+  `jwt.verify` with no secret check — and no verifier of its own. Not fixed
+  here because no increment needed an admin ctx; the fix is the same three
+  lines whenever one does.
 
 - **The `EXPLAIN` test does not pin the model to the query it explains.**
   `waitlistNotifier.test.js`'s test 13 runs its own copy of the waitlist match
@@ -896,10 +903,49 @@ not touched.
       - `join_waitlist` gained the explicit `ctx.role !== 'patient'` guard
         `my_appointments` already had. Decision above already makes a doctor
         ctx fail there structurally; this states it on the one tool that writes.
-- [ ] **5.6** `mcp/doctor-server.js` — separate process, separate auth.
+- [x] **5.6** `mcp/doctor-server.js` — separate process, separate auth.
+      - **`verifyDoctorToken` is the doctor half of 4.2**, and writing it is
+        what resolved the Known Issue above: `JWT_SECRET` is checked BEFORE
+        `jwt.verify`, so a missing secret is `misconfigured` → 500 rather than
+        "Invalid token" → 401. It returns the ctx itself — `{ doctorId, role }`
+        — so no caller decides which claim means identity.
+        - `TokenError` moved to its own module and `verifyPatientToken.js`
+          re-exports it; its three existing importers were untouched.
+        - The HTTP middleware was rewired onto it. `req.doctor.id` is
+          preserved (all eight controller uses read it); **`req.doctor.email`
+          is dropped** — grepped, nothing read it, and the verifier returns
+          identity only.
+      - **A separate token file variable with NO fallback.**
+        `PRESCRIPTO_DOCTOR_TOKEN_FILE`, never the patient's. A fallback would
+        mean a doctor server quietly reading a patient's credential and failing
+        with a confusing `wrong_role` instead of naming the missing setting.
+      - **`callTool` became a factory**, exactly as `runTool` did in 5.5: the
+        context builder and the runner are bound per PROCESS. The audited
+        bridge — call runTool never `tool.handler`, rebuild ctx per call, args
+        never reach ctx — stays one implementation. Each binding mints its own
+        `sessionId`, so a machine running both servers does not file a doctor's
+        calls and a patient's under one id.
+      - **The tripwire now points both ways.** 4.3's `assertPatientRegistry`
+        refuses a doctor tool; `assertDoctorRegistry` refuses a patient tool
+        *and* any `mutates` tool. Both are fatal at startup.
+      - *Two honest limits found while verifying:* the named registry
+        assertions test the guard's LOGIC, not that the server passes it the
+        real registry — that is the smoke's job, so the smoke now prints the
+        child's stderr head and names the rule instead of reporting a bare
+        timeout. And the doctor smoke's audit assertions were **hollow on
+        first writing**: filtered by `role` and `user_id`, then asserting those
+        same two facts, and unscoped — a run that wrote no rows at all passed
+        on leftovers from an earlier one. Now watermarked, and rows are found
+        by tool name so identity is what gets asserted.
 
 **Done when:** a patient can join a waitlist and receive an in-app notification;
-a doctor can ask about their own schedule.
+a doctor can ask about their own schedule. — **DONE.**
+Both servers verified over real stdio pipes with scrubbed child environments
+(`npm run smoke` runs each): four doctor tools advertised and no patient tool,
+identity following the token file across two doctors with no bleed, audit rows
+carrying `role = 'doctor'` and `doctors.id`, and a patient token refused with
+`wrong_role`. Rule 6 now holds end to end — separate registries, separate
+runners, separate token files, separate processes.
 
 ---
 

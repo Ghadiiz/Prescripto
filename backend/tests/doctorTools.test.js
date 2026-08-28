@@ -549,6 +549,25 @@ test('the two registries are disjoint', async () => {
     /Rule 6 violation/,
     'the patient server must refuse a doctor tool in its registry',
   );
+
+  // And the mirror 5.6 added. Asserted here rather than left to the doctor
+  // smoke: over there a refusing server shows up only as "timed out waiting
+  // for initialize", which is true but says nothing about why.
+  const { assertDoctorRegistry } = await import('../../mcp/doctor-server.js');
+  assert.throws(
+    () => assertDoctorRegistry([...doctorTools, getTool('my_appointments')]),
+    /Rule 6 violation/,
+    'the doctor server must refuse a patient tool in its registry',
+  );
+  assert.throws(
+    () => assertDoctorRegistry([...doctorTools, getTool('join_waitlist')]),
+    /Rule [26] violation/,
+    'and the write tool most of all',
+  );
+
+  // Both accept their own registry unchanged.
+  assert.doesNotThrow(() => assertPatientRegistry(patientTools));
+  assert.doesNotThrow(() => assertDoctorRegistry(doctorTools));
 });
 
 test('no doctor tool writes', () => {

@@ -1,5 +1,12 @@
 import jwt from 'jsonwebtoken';
 
+import { TokenError } from './TokenError.js';
+
+// Moved to its own module in 5.6, when doctors/verifyDoctorToken.js became the
+// second thrower. Re-exported here so every existing importer of
+// `{ TokenError }` from this file keeps working unchanged.
+export { TokenError };
+
 // The single definition of "a verified patient", shared by every transport.
 //
 // Rule 3 says identity comes from `ctx`, built from a verified JWT, and never
@@ -11,16 +18,6 @@ import jwt from 'jsonwebtoken';
 // This returns the CTX ITSELF rather than a decoded payload, deliberately.
 // Callers do not get to decide what identity means or which claim to trust —
 // they receive `{ userId, role }` or an error, and nothing else.
-
-export class TokenError extends Error {
-  constructor(code, message) {
-    super(message);
-    this.name = 'TokenError';
-    // Lets each transport map to its own vocabulary — HTTP statuses here, a
-    // readable tool error over MCP — without re-deriving the cause.
-    this.code = code;
-  }
-}
 
 export const verifyPatientToken = (token) => {
   if (!token) {

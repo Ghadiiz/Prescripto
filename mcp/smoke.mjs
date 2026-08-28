@@ -23,10 +23,11 @@
 // mcp/ has no test runner, so this file is its only automated check — the same
 // gap docs/agent-plan.md records for frontend/.
 
-import { spawn } from 'node:child_process';
 import { mkdtempSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+
+import { startServer, BACKEND_ENV_KEYS } from './rpcClient.mjs';
 
 import './env.js';
 import jwt from '../backend/node_modules/jsonwebtoken/index.js';
@@ -62,93 +63,21 @@ const patientB = fixture.otherUserId;
 
 writeToken(patientA);
 
-// Everything backend/.env supplies is stripped, so the server must find and
-// load that file itself. Passing `{...process.env}` would hand it the values
-// this process already loaded, and the check would pass even with env.js
-// removed — which is exactly what happened the first time it was written.
-const childEnv = { ...process.env, [TOKEN_FILE_VAR]: tokenPath };
-for (const key of ['JWT_SECRET', 'DB_HOST', 'DB_USER', 'DB_PASSWORD', 'DB_NAME']) {
-  delete childEnv[key];
-}
-
-const child = spawn(process.execPath, ['patient-server.js'], {
+// The child gets a SCRUBBED environment and must still find backend/.env
+// itself — see startServer in rpcClient.mjs, where the scrubbing lives.
+const server = startServer({
+  script: 'patient-server.js',
   cwd: import.meta.dirname,
-  stdio: ['pipe', 'pipe', 'pipe'],
-  env: childEnv,
+  env: { [TOKEN_FILE_VAR]: tokenPath },
+  scrub: BACKEND_ENV_KEYS,
 });
 
-const stdoutLines = [];
-const stderrChunks = [];
-let buffer = '';
-
-child.stdout.on('data', (chunk) => {
-  buffer += chunk.toString();
-  const lines = buffer.split('\n');
-  buffer = lines.pop() ?? '';
-  for (const line of lines) if (line.trim()) stdoutLines.push(line);
-});
-child.stderr.on('data', (chunk) => stderrChunks.push(chunk.toString()));
-
-let nextId = 1;
-const rpc = (method, params = {}) => {
-  const id = nextId++;
-  child.stdin.write(`${JSON.stringify({ jsonrpc: '2.0', id, method, params })}\n`);
-  return new Promise((resolve, reject) => {
-    const started = Date.now();
-    const poll = setInterval(() => {
-      for (const line of stdoutLines) {
-        try {
-          const parsed = JSON.parse(line);
-          if (parsed.id === id) {
-            clearInterval(poll);
-            return resolve(parsed);
-          }
-        } catch {
-          /* purity is asserted separately */
-        }
-      }
-      if (Date.now() - started > 20000) {
-        clearInterval(poll);
-        reject(new Error(`timed out waiting for ${method}`));
-      }
-    }, 50);
-  });
-};
-
-const callTool = async (name, args = {}) => {
-  const response = await rpc('tools/call', { name, arguments: args });
-  const text = response.result?.content?.[0]?.text;
-
-  // Our own results are JSON, but a schema rejection comes back as the SDK's
-  // plain-text "Input validation error: …" — so parsing is best-effort. The
-  // first version of this helper assumed JSON and crashed on exactly the case
-  // it was written to check.
-  let parsed = null;
-  if (text) {
-    try {
-      parsed = JSON.parse(text);
-    } catch {
-      parsed = null;
-    }
-  }
-
-  return {
-    isError: response.result?.isError ?? false,
-    parsed,
-    text: text ?? null,
-    protocolError: response.error ?? null,
-  };
-};
+const { rpc, callTool } = server;
 
 let passed = false;
 
 try {
-  await rpc('initialize', {
-    protocolVersion: '2025-06-18',
-    capabilities: {},
-    clientInfo: { name: 'smoke', version: '0.0.0' },
-  });
-  child.stdin.write(`${JSON.stringify({ jsonrpc: '2.0', method: 'notifications/initialized' })}\n`);
+  await server.initialize('smoke');
 
   // 1. every tool advertised, with a real schema
   const list = await rpc('tools/list');
@@ -238,30 +167,16 @@ try {
 } catch (error) {
   results.failure = error.message;
 } finally {
-  child.kill('SIGTERM');
-  await new Promise((resolve) => setTimeout(resolve, 250));
+  await server.stop();
 }
 
-const stderr = stderrChunks.join('');
+const stderr = server.stderr();
 results.childAuth = {
   authenticatedAsPatient: stderr.includes(`authenticated as patient #${patientA}`),
   registered: /\d+ read-only patient tool\(s\) registered/.test(stderr),
 };
 
-const unparseable = stdoutLines.filter((line) => {
-  try {
-    JSON.parse(line);
-    return false;
-  } catch {
-    return true;
-  }
-});
-results.stdoutPurity = {
-  totalLines: stdoutLines.length,
-  unparseableLines: unparseable.length,
-  offenders: unparseable.slice(0, 2),
-  verdict: unparseable.length === 0 ? 'CLEAN' : 'CORRUPTED',
-};
+results.stdoutPurity = server.stdoutPurity();
 
 // --- in-process auth cases (4.2) --------------------------------------------
 

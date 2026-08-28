@@ -1,17 +1,25 @@
-# Prescripto MCP — patient server
+# Prescripto MCP servers
 
-Exposes the Prescripto patient tools to an MCP host such as Claude Desktop, so
-you can ask about doctors and your own appointments in a normal conversation.
+Exposes the Prescripto tools to an MCP host such as Claude Desktop, so you can
+ask about your appointments or your practice in a normal conversation.
 
-The server runs on your machine, talks to your database directly, and acts
-**only** as the patient whose token you give it.
+**There are two servers, and they are separate on purpose** — separate
+processes, separate registries, separate token files. Neither can reach the
+other's tools. A patient token is refused by the doctor server and vice versa,
+even though both signatures are perfectly valid.
 
-| | |
-|---|---|
-| Tools | `search_doctors`, `get_doctor`, `list_specialities`, `check_availability`, `suggest_speciality`, `my_appointments` |
-| Transport | stdio — the host launches it as a subprocess |
-| Writes | none. Every tool is read-only; booking still happens in the web app |
-| Identity | one patient, from a token file you control |
+| | Patient | Doctor |
+|---|---|---|
+| Script | `patient-server.js` | `doctor-server.js` |
+| Tools | `search_doctors`, `get_doctor`, `list_specialities`, `check_availability`, `suggest_speciality`, `my_appointments` | `my_schedule`, `schedule_gaps`, `patients_needing_followup`, `my_stats` |
+| Token file variable | `PRESCRIPTO_TOKEN_FILE` | `PRESCRIPTO_DOCTOR_TOKEN_FILE` |
+| Identity | one patient | one doctor |
+| Transport | stdio — the host launches it as a subprocess | same |
+| Writes | none | none |
+
+**Steps 1-5 below set up the patient server.** The doctor server is the same
+process with three substitutions — see
+[The doctor server](#the-doctor-server) at the end.
 
 ---
 
@@ -271,13 +279,74 @@ the file, and the next call uses the new identity.
   never commit it. On macOS/Linux, `chmod 600` it.
 - **`backend/.env` is never committed.** It holds `JWT_SECRET` and your
   database password. It is gitignored; keep it that way.
-- **This server is patient-only.** It refuses a doctor's or admin's token with
-  `wrong_role`, even though the signature is perfectly valid — the tools are
-  scoped to one patient's own data, and doctor tooling is a separate server
-  with separate auth.
+- **Each server serves one role only.** The patient server refuses a doctor's
+  or admin's token with `wrong_role`, and the doctor server refuses a
+  patient's — in both cases even though the signature is perfectly valid. The
+  two have separate registries, separate token files and separate processes;
+  see [The doctor server](#the-doctor-server).
 - **Every tool call is logged** to the `assistant_audit_log` table with the
   patient id, tool name, arguments and result count.
 - **Nothing here can write.** No tool books, changes or cancels an appointment.
+
+---
+
+## The doctor server
+
+Everything above applies, with three substitutions. Nothing else differs —
+same `backend/.env`, same Node, same install.
+
+| Step | Patient | Doctor |
+|---|---|---|
+| 2 — get a token | sign in at <http://localhost:5173> | sign in to the **doctor panel** at <http://localhost:5174> |
+| 3 — save it | `~/.prescripto/mcp-token` | `~/.prescripto/mcp-doctor-token` |
+| 4 — config | `patient-server.js`, `PRESCRIPTO_TOKEN_FILE` | `doctor-server.js`, `PRESCRIPTO_DOCTOR_TOKEN_FILE` |
+
+> **Use a different file for the doctor token.** The two servers deliberately
+> read different variables and the doctor server has **no fallback** to the
+> patient one — so a doctor server with no `PRESCRIPTO_DOCTOR_TOKEN_FILE` set
+> tells you the variable is missing, rather than quietly reading a patient's
+> credential and failing with a confusing "wrong role".
+
+Both servers can run at once. Add them as two entries:
+
+```json
+{
+  "mcpServers": {
+    "prescripto-patient": {
+      "command": "C:\\Program Files\\nodejs\\node.exe",
+      "args": ["C:\\Ghadi\\Future\\React\\prescripto\\mcp\\patient-server.js"],
+      "env": {
+        "PRESCRIPTO_TOKEN_FILE": "C:\\Users\\LENOVO\\.prescripto\\mcp-token"
+      }
+    },
+    "prescripto-doctor": {
+      "command": "C:\\Program Files\\nodejs\\node.exe",
+      "args": ["C:\\Ghadi\\Future\\React\\prescripto\\mcp\\doctor-server.js"],
+      "env": {
+        "PRESCRIPTO_DOCTOR_TOKEN_FILE": "C:\\Users\\LENOVO\\.prescripto\\mcp-doctor-token"
+      }
+    }
+  }
+}
+```
+
+The doctor server appears as `prescripto-doctor` with four tools. Try:
+
+> What does my day look like tomorrow?
+
+> Where do I have a free hour this week?
+
+> Which of my patients haven't been back in a couple of months?
+
+**What it cannot do.** It has no write tool and no patient tools: it cannot
+book, cancel or complete an appointment, cannot look up another doctor's
+schedule, and returns no patient contact details — only names, so you can
+recognise your own patients. Acting on any of it happens in the doctor panel.
+
+**Patient names are shown to you and sent to your MCP host.** That is the same
+information the doctor panel already shows you, but over MCP it leaves this
+machine's process and reaches the host. Worth knowing before pointing this at
+a database with real patients in it.
 
 ---
 
