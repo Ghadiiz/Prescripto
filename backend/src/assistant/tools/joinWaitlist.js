@@ -59,6 +59,21 @@ export default {
   handler: async (ctx, args, { sessionId } = {}) => {
     const { doctor_id: doctorId, date_from: dateFrom, date_to: dateTo } = args;
 
+    // The guard my_appointments has, on the one tool that WRITES.
+    //
+    // 5.5 introduced doctor contexts, which are `{ doctorId, role }` — so a
+    // doctor ctx arriving here already fails on `ctx.userId` being undefined
+    // against a NOT NULL column. This makes that explicit rather than
+    // incidental: the row this tool writes says which patient is waiting, and
+    // "whoever this is" is not an acceptable answer to that question.
+    if (!ctx || !Number.isInteger(ctx.userId) || ctx.role !== 'patient') {
+      return refuse(
+        'unavailable',
+        'This tool is only available to a signed-in patient acting on their ' +
+          'own behalf.',
+      );
+    }
+
     // --- validation, before anything is offered for confirmation ----------
 
     if (isBeforeToday(dateFrom)) {

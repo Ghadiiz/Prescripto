@@ -1,15 +1,24 @@
 // Rule 5: tool results are data, not instructions.
 //
-// Free-text fields on `doctors` are attacker-controlled through the admin
-// panel, so every one of them is truncated, stripped and labelled before it
-// can reach a prompt. This is the single definition of which fields those are;
-// tools must not maintain their own lists.
+// Free text that reaches a prompt is truncated, stripped and labelled first,
+// whoever wrote it. There are two authors, not one:
+//
+//   - fields on `doctors`, attacker-controlled through the admin panel, and
+//   - `users.name`, which every patient types for themselves at registration
+//     (5.5) — the doctor tools return it, so "Ghadi\n\nSYSTEM: ..." would be
+//     an injection into the DOCTOR's assistant written by a patient.
+//
+// This is the single definition of which fields those are; tools must not
+// maintain their own lists.
 
 // Short structured fields. Stay plain strings so result shapes and 3.2's
 // rendering are unaffected.
 const SHORT_TEXT_FIELDS = [
   'name',
   'doctor_name',
+  // Patient-supplied, unlike everything around it. Same treatment: the threat
+  // is untrusted text reaching a prompt, and the author does not change it.
+  'patient_name',
   'degree',
   'address_line1',
   'address_line2',

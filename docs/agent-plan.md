@@ -108,6 +108,21 @@ not lost; none blocks the current phase.
   transparently); **6.1** is the natural home, since it already reworks this
   layer for Redis. *Found during 1.7.*
 
+- **`doctorAuthMiddleware` cannot tell a misconfigured server from a forged
+  token.** It calls `jwt.verify(token, process.env.JWT_SECRET)` with no check
+  that the secret exists. With `JWT_SECRET` unset, jsonwebtoken throws
+  `JsonWebTokenError` — the same class a bad signature produces — so the
+  doctor is told "Invalid token" and someone spends an afternoon on the wrong
+  problem. Exactly the confusion 4.2 fixed for patients by checking the secret
+  BEFORE `jwt.verify` in `verifyPatientToken.js`, with a distinct
+  `misconfigured` code that maps to a 500 rather than a 401.
+
+  **5.6 is where this gets fixed**, because that increment needs a
+  `verifyDoctorToken` anyway — the doctor MCP server has no request to read a
+  header from and must reach the same answer the HTTP middleware does. Left
+  alone here rather than rewiring the doctor panel's live auth path in an
+  increment about tools. *Found during 5.5.*
+
 - **The `EXPLAIN` test does not pin the model to the query it explains.**
   `waitlistNotifier.test.js`'s test 13 runs its own copy of the waitlist match
   SQL and asserts the planner picks `idx_match`, which proves the index still
@@ -840,9 +855,47 @@ not touched.
         stacked.
       - Matching is scoped to `active` rows whose window covers the freed date,
         excluding the patient who cancelled and any date already past.
-- [ ] **5.5** Doctor tools: `mySchedule`, `scheduleGaps`,
+- [x] **5.5** Doctor tools: `mySchedule`, `scheduleGaps`,
       `patientsNeedingFollowup`, `myStats`. `scheduleGaps` computes free blocks
       against the existing fixed hours — no schema change needed.
+      - **A separate registry, not a role parameter** (rule 6).
+        `doctorTools/index.js` is its own list, and `runTool.js` became a
+        FACTORY: `createToolRunner(registry, auditIdentity)`, bound once per
+        PROCESS. There is no role branch anywhere in the runner, and all ten
+        existing importers of `runTool` were unchanged.
+      - **A doctor ctx is `{ doctorId, role }`, never `{ userId }`.** A doctor
+        JWT's `id` is `doctors.id` — a different id space from `users.id`,
+        where patient #7 and doctor #7 are different people. With a distinct
+        field, a ctx that reaches the wrong registry returns empty instead of
+        returning the wrong person's rows.
+        - That is also why the runner takes an identity extractor:
+          `assistant_audit_log.user_id` is NOT NULL, and 003's `role` ENUM is
+          what tells the two id spaces apart in that column. The mutation
+          swapping it back to `ctx.userId` did not merely mislabel the row —
+          it made the row **unwritable**, which failed the call. The audit
+          write is a precondition of getting data back, not a side effect.
+      - **`doctor_id` is an identity key on this side and not on the other.**
+        In a patient tool it names another party; in a doctor tool it names the
+        caller. The guardrail suite applies a different banned-key list to each
+        registry.
+      - **Patient names are untrusted text too.** `users.name` is written by
+        the patient, so a doctor tool returning it raw would let a patient
+        write an instruction into the DOCTOR's assistant. `patient_name` joins
+        the same `sanitizeAdminText` list as `doctors.about` — rule 5 with a
+        different author, not a different rule.
+      - `doctorAppointmentService.getDoctorAppointments` is deliberately NOT
+        reused: it is `SELECT a.*` and returns `patientEmail`. Correct for the
+        panel, forbidden in a tool result. `my_stats` sums `a.amount`, the fee
+        actually charged, rather than joining today's `doctors.fees` onto last
+        year's appointments the way `getDoctorDashboard` does.
+      - The 10:00-21:00 grid is restated in `doctorTools/hours.js` rather than
+        the booking flow being refactored mid-increment (`getAvailableSlots`
+        throws when a doctor is not accepting bookings, and returns display
+        strings). **The duplication is pinned by a test** asserting the two
+        grids agree for a doctor with nothing booked.
+      - `join_waitlist` gained the explicit `ctx.role !== 'patient'` guard
+        `my_appointments` already had. Decision above already makes a doctor
+        ctx fail there structurally; this states it on the one tool that writes.
 - [ ] **5.6** `mcp/doctor-server.js` — separate process, separate auth.
 
 **Done when:** a patient can join a waitlist and receive an in-app notification;

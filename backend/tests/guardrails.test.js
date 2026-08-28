@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 
 import { connectDB, getDB } from '../src/config/mysql.js';
 import { tools, readOnlyTools, getTool } from '../src/assistant/tools/index.js';
+import { doctorTools } from '../src/assistant/doctorTools/index.js';
 import { runTool } from '../src/assistant/runTool.js';
 import { listSpecialityKeywords } from '../src/assistant/models/specialityQueries.js';
 
@@ -24,6 +25,13 @@ const IDENTITY_KEYS = [
 ];
 
 // `doctor_id` is deliberately absent: it names another party, not the caller.
+
+// On the DOCTOR side that reverses. A doctor tool taking `doctor_id` would be
+// letting the model choose whose practice it is reading — which is exactly
+// what rule 3 bans, and is why the two lists cannot be one list. `patient_id`
+// stays banned on both sides: a doctor tool names a patient in its RESULTS,
+// never in its arguments.
+const DOCTOR_IDENTITY_KEYS = [...IDENTITY_KEYS, 'doctor_id', 'doctorId'];
 
 const BANNED_RESULT_FIELDS = [
   'password',
@@ -143,6 +151,37 @@ test('rule 3: no registered tool schema contains an identity key', () => {
       );
     }
   }
+});
+
+test('rule 3: no DOCTOR tool schema contains an identity key', () => {
+  // The doctor registry did not exist when this suite was written (5.5 added
+  // it). Iterating it here rather than only in doctorTools.test.js means a
+  // fifth doctor tool is held to rule 3 by the same test the patient tools
+  // are, instead of by a file someone might not think to open.
+  for (const tool of doctorTools) {
+    const keys = Object.keys(tool.schema.shape);
+
+    for (const key of keys) {
+      assert.ok(
+        !DOCTOR_IDENTITY_KEYS.includes(key),
+        `${tool.name} exposes identity key "${key}" — on the doctor side a ` +
+          'doctor id names the CALLER, and identity must come from ctx',
+      );
+    }
+  }
+});
+
+test('rule 2: no doctor tool writes', () => {
+  const writeTools = doctorTools
+    .filter((tool) => tool.mutates)
+    .map((tool) => tool.name);
+
+  assert.deepEqual(
+    writeTools,
+    [],
+    `expected no doctor write tool, found [${writeTools}] — rule 2's single ` +
+      'exception is join_waitlist, which is a patient tool.',
+  );
 });
 
 test('rule 4: no tool result contains a banned field', async () => {
