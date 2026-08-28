@@ -1,6 +1,6 @@
 # AI Assistant — Build Plan
 
-Seven phases, each broken into increments. **One increment per Claude Code
+Eight phases, each broken into increments. **One increment per Claude Code
 session.** Tick boxes as they complete.
 
 Scope decisions already made:
@@ -12,7 +12,7 @@ Scope decisions already made:
 - Waitlist notifies **in-app**, not by email.
 - Provider is **Gemini free tier** during development.
 
-Phases 0–4 alone are a complete, demonstrable project. 5–7 are additive.
+Phases 0–4 alone are a complete, demonstrable project. 5–8 are additive.
 
 ---
 
@@ -964,17 +964,116 @@ Each of these maps to an explicit line on the target job description.
 
 ---
 
-## Phase 7 — RAG clinic knowledge base (optional)
+## Phase 7 — Time-aware availability and actionable notifications
+
+Enhancements that came out of the Phase 5 live end-to-end test. **None of these
+is a bug** — the current behaviour is correct, just less capable. A notification
+that says "a slot opened on Aug 30" is true and useful; it is simply not as
+useful as one that says "a 10:30 slot opened, click to book it".
+
+The theme is TIME. Phase 5 reasons about availability at the granularity of a
+DATE: `check_availability` returns a count per date, the waitlist stores a date
+range, and the 5.4 notifier matches on the date a slot frees. Every increment
+here pushes some part of that down to the half-hour the booking grid actually
+uses.
+
+**Why here, after Phase 6 and before RAG:**
+
+- 7.2's notifier work is cleaner on top of **6.2's durable job queue** than on
+  the current fire-and-forget notifier, whose stated cost is that a failed
+  notification is simply lost.
+- 7.4 changes the 5.1 schema and its unique constraint, which wants **6.4's CI**
+  guarding it rather than a migration verified by hand.
+- All four refine the core Phase 5 booking and waitlist flow, so they come
+  before the optional RAG add-on that adds a different kind of retrieval.
+
+Ordered cheapest-first: the frontend win leads, the schema change goes last.
+
+- [ ] **7.1** **Actionable notification click-through.** Clicking a notification
+      navigates to the doctor's booking page with the date pre-filled, instead
+      of leaving the patient to find the doctor themselves.
+      - Cheapest, highest-value, lowest-risk of the four — and mostly
+        FRONTEND. The payload 5.4 writes already carries `doctor_id` and
+        `date`, so nothing new has to be stored or matched: the bell routes to
+        `/appointment/:docId` with the date preselected.
+      - **Check first whether `Appointment.jsx` can accept a pre-selected date**
+        via URL param or router state; it may need a small addition.
+      - Ties into the **3.4 deferred item** in Known issues — the booking page
+        offering slots for doctors who are not accepting. Both touch that page's
+        date handling, and a notification is a *stronger* invitation to book
+        than the assistant card 3.4 already softened, so the two are worth
+        deciding together rather than twice.
+
+- [ ] **7.2** **The freed time, not just the freed date.** The notification says
+      only which DATE opened up. The cancelled appointment has a specific
+      `appointment_time`, so the notice can say *"a 10:30 slot opened with
+      Dr. X on Aug 30"*.
+      - Smaller than 7.3 and 7.4: no schema change and no new query. The time is
+        already on the row `waitlistNotifier.js` reads — it flows through the
+        notifier and into the payload, and the bell renders it.
+      - Note the dedupe interaction: 5.4 suppresses a second unread notice for
+        the same doctor and DATE. Once a notice names a time, two different
+        freed slots on one day are arguably two different pieces of news —
+        decide deliberately whether the dedupe key gains the time too, rather
+        than letting it follow by accident.
+      - Rule 7 still holds: a named time is still a snapshot with a
+        `checked_at`, never a held slot.
+
+- [ ] **7.3** **Specific-slot availability answers.** `check_availability`
+      returns a free-slot COUNT plus `checked_at`, so the model *cannot* answer
+      "is 10am–2pm free?" — it has no per-slot data to reason over. Return the
+      actual free/booked times for a date so it can say "10–12 is booked, 12–2
+      has openings" and offer the waitlist for that window.
+      - The slots already exist: `getAvailableSlots` builds them and 5.5's
+        `doctorTools/hours.js` already works in half-hour starts. This is
+        mostly about widening what the tool RETURNS.
+      - **Times are not PII, but the wider result surface still follows rule 4's
+        explicit-column discipline:** return times and availability, never WHO
+        booked the other slots. "10:30 is taken" is availability; "10:30 is
+        taken by Sara" is a patient's medical appointment.
+      - **Cost, weighed honestly:** a per-slot result is far more tokens per
+        turn than a count. Against the free tier's ~15 conversations a day that
+        is a real budget question, not a rounding error — consider returning
+        slots only when the question is time-specific, or a compact
+        representation rather than a full list.
+
+- [ ] **7.4** **Time-range waitlist** (schema change — the biggest item, last).
+      `join_waitlist` and the `waitlist` table are DATE-range only
+      (`date_from`/`date_to`), and 5.4's notifier matches on the date a slot
+      frees, not the hour. To support *"waitlist me if 10am–2pm frees up
+      specifically"*, the waitlist must carry a TIME window and the matching
+      must compare times, not just dates.
+      - **This touches 5.1's schema and its unique constraint.**
+        `active_request` currently CONCATs `user_id`, `doctor_id`, `date_from`
+        and `date_to`; adding time bounds changes the uniqueness key, so
+        "already on this list" comes to mean something new. That guarantee is
+        currently a DATABASE guarantee — keep it one.
+      - **Decide the granularity.** Half-hour, to match the booking grid, is
+        the obvious candidate and keeps the notifier comparing like with like.
+      - Migration 007, applied to Aiven by hand like every other — see
+        Production state. **Wants 6.4's CI**, which is a large part of why this
+        phase sits after Phase 6.
+      - Interacts with 7.2's dedupe decision and with 7.3's per-slot data: all
+        three are the same move to half-hour granularity, seen from the
+        notification, the query and the schema.
+
+---
+
+## Phase 8 — RAG clinic knowledge base (optional)
 
 Only after 0–4 are solid. The point is understanding *why* RAG suits
 unstructured content and SQL suits structured content.
 
-- [ ] **7.1** Migration: `clinic_docs` (id, title, content, embedding).
-- [ ] **7.2** Embedding generation + ingestion script for FAQ content
+*Renumbered from Phase 7 when the time-aware phase was inserted above it. It
+stays last because it is the one phase that adds a new KIND of retrieval rather
+than refining the booking flow — and the only one marked optional.*
+
+- [ ] **8.1** Migration: `clinic_docs` (id, title, content, embedding).
+- [ ] **8.2** Embedding generation + ingestion script for FAQ content
       (hours, parking, insurance, cancellation policy, what to bring).
-- [ ] **7.3** `tools/searchClinicInfo.js` — semantic search, returns passages
+- [ ] **8.3** `tools/searchClinicInfo.js` — semantic search, returns passages
       with sources. Same sanitisation rules as every other tool.
-- [ ] **7.4** Short write-up in `docs/agent-design.md`: why structured queries
+- [ ] **8.4** Short write-up in `docs/agent-design.md`: why structured queries
       handle doctors and availability, and why RAG handles policy content.
 
 ---
