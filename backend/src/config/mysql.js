@@ -110,7 +110,7 @@ export const probeDB = async () => {
     if (!ready) console.log('Database is reachable again.');
     ready = true;
     return true;
-  } catch (error) {
+  } catch {
     ready = false;
     return false;
   } finally {

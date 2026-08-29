@@ -3,7 +3,6 @@ import * as doctorAuthController from '../controllers/doctorAuthController.js';
 import { authenticateDoctor } from '../middleware/doctorAuthMiddleware.js';
 import { authLimiter } from '../../middleware/rateLimiters.js';
 import {
-  login,
   getProfile,
   updateProfile,
   getAppointments,

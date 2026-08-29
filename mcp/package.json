@@ -9,12 +9,18 @@
     "start:doctor": "node doctor-server.js",
     "smoke": "node smoke.mjs && node doctor-smoke.mjs",
     "smoke:patient": "node smoke.mjs",
-    "smoke:doctor": "node doctor-smoke.mjs"
+    "smoke:doctor": "node doctor-smoke.mjs",
+    "lint": "eslint ."
   },
   "dependencies": {
     "@modelcontextprotocol/server": "^2.0.0",
     "dotenv": "^17.4.2"
   },
   "author": "Ghadi Dababneh",
-  "license": "UNLICENSED"
+  "license": "UNLICENSED",
+  "devDependencies": {
+    "@eslint/js": "^9.39.5",
+    "eslint": "^9.39.5",
+    "globals": "^16.5.0"
+  }
 }

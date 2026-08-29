@@ -137,6 +137,8 @@ jobs:
           cache-dependency-path: |
             frontend/package-lock.json
             admin/package-lock.json
+            backend/package-lock.json
+            mcp/package-lock.json
 
       - name: Install frontend dependencies
         working-directory: frontend
@@ -146,8 +148,21 @@ jobs:
         working-directory: admin
         run: npm ci
 
-      # Not a plain `eslint .`: both apps carry pre-existing errors that would
-      # make this red on every push. See scripts/lint-ratchet.mjs.
+      # --ignore-scripts: linting needs eslint and the source, not a compiled
+      # bcrypt. The native build is the slowest thing in this install and
+      # nothing in the lint job uses it.
+      - name: Install backend dependencies
+        working-directory: backend
+        run: npm ci --ignore-scripts
+
+      - name: Install MCP dependencies
+        working-directory: mcp
+        run: npm ci --ignore-scripts
+
+      # Not a plain `eslint .`: the two FRONTENDS carry pre-existing errors that
+      # would make this red on every push. backend/ and mcp/ adopted ESLint
+      # clean in 6.7 and sit at a baseline of 0, so for them the ratchet is a
+      # plain "stay at zero". See scripts/lint-ratchet.mjs.
       - name: Lint must not get worse
         run: node scripts/lint-ratchet.mjs
 

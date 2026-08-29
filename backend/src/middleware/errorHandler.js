@@ -1,11 +1,17 @@
 import { AppError } from '../utils/AppError.js';
 import { noteConnectionFailure } from '../config/mysql.js';
 
-export const notFound = (req, res, next) => {
+// `_next` rather than deleting it: Express identifies middleware by ARITY, so
+// the parameter has to stay even though nothing calls it. Renaming satisfies
+// the linter without changing fn.length.
+export const notFound = (req, res, _next) => {
   res.status(404).json({ success: false, message: 'Route not found' });
 };
 
-export const errorHandler = (err, req, res, next) => {
+// Four parameters is what makes Express treat this as an ERROR handler rather
+// than ordinary middleware. Dropping the unused `next` would silently stop it
+// being one, so it is renamed, not removed.
+export const errorHandler = (err, req, res, _next) => {
   console.error('Error:', err);
 
   // The one place that already sees every thrown error, which makes it the

@@ -1264,15 +1264,42 @@ Each of these maps to an explicit line on the target job description.
         and its own mutation testing rather than a ride-along.
       - Numbered 6.6 rather than inserted earlier so that 6.2-6.5, which are
         cross-referenced from Phases 5 and 7, keep their numbers.
-- [ ] **6.7** Backend ESLint: add a config, run it, triage and fix or configure
-      its findings, and wire it into 6.4's CI.
-      - Deliberately NOT bundled into 6.4. A fresh config across ~60 backend
-        files would have turned CI wiring into a lint-adoption-and-triage job —
-        the same tangle the frontend errors already demonstrate.
-      - The backend's correctness and security are already held by the test
-        suite, the mutation testing and the `CLAUDE.md` rules, which catch
-        domain-specific problems a general linter cannot. Backend lint is
-        hygiene, and deserves its own focused pass.
+- [x] **6.7** ESLint for `backend/` AND `mcp/`: add configs, run them, triage
+      and fix the findings, and wire both into 6.4's CI.
+      - Deliberately NOT bundled into 6.4. A fresh config across 123 files
+        would have turned CI wiring into a lint-adoption-and-triage job — the
+        same tangle the frontend errors already demonstrate.
+      - **`mcp/` was included** rather than left out: linting the backend while
+        the MCP servers stayed unlinted would have been arbitrary, and those
+        ten files carry the rule-6 registry separation and the token
+        verification. It came back **clean on the first run**.
+      - **`require()` is now banned by the linter** (`no-restricted-syntax`),
+        moving CLAUDE.md's "ESM imports only" from review-enforced to
+        machine-enforced. It starts green because the codebase is already fully
+        ESM, so it can only ever fire on a regression.
+      - **11 findings in `backend/`, all real, all FIXED — none suppressed:**
+        - six `no-useless-catch` in `authService.js`, each literally
+          `catch (error) { throw error; }`. Unwrapped: a rethrow of the same
+          error changes nothing, not even the stack. Net exactly −24 lines.
+        - an unused `catch (error)` binding in `config/mysql.js` from 6.6 —
+          ESLint 9 defaults `caughtErrors` to `"all"`, which is right, so the
+          default was kept and the code fixed.
+        - a dead `login` import in `doctorPanelRoutes.js`, and a dead
+          `getRedis()` line in `redisStores.test.js` left by 6.6.
+        - **`errorHandler.js`: `next` renamed to `_next`, NOT removed.**
+          Express identifies an error handler by ARITY — `fn.length === 4` — so
+          deleting the unused parameter would have silently stopped it being
+          one. Recorded here because it is exactly the kind of "obvious"
+          cleanup that breaks a framework contract, and the comment at both
+          call sites says so.
+      - *A scripting mistake, caught and redone:* the first unwrap used
+        `'  try {'` as its anchor, which also matches the TAIL of a nested
+        `    try {` at four-space indent — so it unwrapped the wrong block and
+        produced three new errors. Reverted from a backup and redone anchored
+        to line start; the nested email try/catch is intact.
+      - CI's lint job now covers four packages, installing the Node ones with
+        `npm ci --ignore-scripts` — linting needs eslint and source, not a
+        compiled `bcrypt`.
 - [ ] **6.8** Frontend test runner — Vitest + React Testing Library, for
       `frontend/` and `admin/`.
       - The missing prerequisite for 6.9. Both apps have **no test tooling at
@@ -1285,6 +1312,21 @@ Each of these maps to an explicit line on the target job description.
         which module a context is imported from; fixing effect behaviour before
         the tests that would catch a regression exist is backwards.
 
+- [ ] **6.10** Parameterised-query lint rule: allowlist the known-safe
+      interpolation patterns and flag dangerous value interpolation.
+      - The strongest CLAUDE.md rule to make machine-checkable — "parameterised
+        queries only, never string-concatenated SQL" is currently held by review
+        alone.
+      - **Kept out of 6.7 on purpose.** A naive "no template literals in
+        `db.query`" fires on the codebase's LEGITIMATE interpolations:
+        code-controlled column constants (`${APPOINTMENT_COLUMNS}`,
+        `${SCHEDULE_COLUMNS}`) and clamped values (`LIMIT ${safeLimit}`). It
+        would need per-site `eslint-disable` comments on day one, which trains
+        reflexive disabling and hides the future real violation.
+      - Its own increment because **the allowlist is security analysis, not
+        config adoption**: deciding which interpolations are provably
+        code-controlled is the work, and a half-done version that fires on
+        correct code is worse than none.
 ---
 
 ## Phase 7 — Time-aware availability and actionable notifications

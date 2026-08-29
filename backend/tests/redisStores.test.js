@@ -1,7 +1,7 @@
 import { test, before, beforeEach, after } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { closeRedis, getRedis, isRedisEnabled, withRedis } from '../src/config/redis.js';
+import { closeRedis, isRedisEnabled, withRedis } from '../src/config/redis.js';
 import {
   checkRateLimit,
   resetRateLimits,
@@ -45,8 +45,6 @@ before(async () => {
   // code for a connection problem. No explicit connect(): withRedis waits for
   // readiness itself now, and a test that hand-connected would have hidden the
   // first-command bug this suite found.
-  const redis = getRedis();
-
   const { value: info } = await withRedis((r) => r.info('server'));
   assert.ok(info, 'could not reach Redis at REDIS_URL');
   const version = /redis_version:([\d.]+)/.exec(info)?.[1] ?? '0';
