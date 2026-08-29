@@ -49,6 +49,9 @@ The patient site opens on the Login view with these credentials shown; the admin
 - **Auth:** JWT with role-based access; bcrypt password hashing
 - **Media:** Cloudinary for image uploads
 - **Email:** Resend (verification, password reset, doctor onboarding)
+- **AI assistant:** Google Gemini, with a tool layer the chat endpoint and two MCP servers share
+- **Queue & cache:** BullMQ for durable waitlist notifications; Redis for rate limits, confirmations and the daily model budget (optional — without it these fall back to in-memory)
+- **API docs:** OpenAPI 3 generated from route annotations, served at `/api/docs`
 - **Infrastructure:** Docker (local orchestration via Docker Compose); deployed on Vercel (frontends), Render (API), and Aiven (managed MySQL)
 
 ## Project structure
@@ -56,12 +59,60 @@ The patient site opens on the Login view with these credentials shown; the admin
 ```
 .
 ├── backend/          Express API, MySQL models, auth, business logic
-│   ├── database/     schema.sql and seed script
+│   ├── database/     schema.sql, migrations and seed script
 │   └── src/          controllers, services, models, middleware, config
+│       └── assistant/  tool layer, agent loop, guardrails, audit log
+├── mcp/              MCP servers — one for patients, one for doctors
 ├── frontend/         Patient-facing React app (Vite)
 ├── admin/            Admin + Doctor React panel (Vite)
+├── scripts/          repo tooling (lint ratchet)
+├── docs/             build plan and working notes
 └── docker-compose.yml
 ```
+
+## Architecture
+
+The assistant is built around **one tool layer with two kinds of consumer**.
+
+```mermaid
+flowchart TD
+    WEB["Patient web app"] -->|"POST /api/assistant/chat (SSE)"| LOOP["assistantController<br/>agentLoop"]
+    HOST["MCP host<br/>(Claude Desktop)"] -->|stdio| PSRV["mcp/patient-server.js"]
+    HOST -->|stdio| DSRV["mcp/doctor-server.js"]
+
+    LOOP --> RUN["runTool"]
+    PSRV --> RUN
+    DSRV --> RUNDOC["runDoctorTool"]
+
+    RUN --> PTOOLS["tools/<br/>6 read-only + join_waitlist"]
+    RUNDOC --> DTOOLS["doctorTools/<br/>4 read-only"]
+
+    PTOOLS --> MODELS["assistant/models/<br/>parameterised SQL"]
+    DTOOLS --> MODELS
+    MODELS --> DB[("MySQL")]
+
+    RUN -.->|every call| AUDIT[("assistant_audit_log")]
+    RUNDOC -.->|every call| AUDIT
+
+    LOOP --> AGENT["agentService<br/>the only file that<br/>knows the provider"]
+    AGENT --> GEMINI(["Gemini"])
+
+    CANCEL["cancel an appointment"] --> QUEUE["waitlist queue<br/>BullMQ + Redis"]
+    QUEUE --> WORKER["worker"]
+    WORKER --> DB
+```
+
+**One tool layer, two kinds of consumer.** The chat endpoint and the MCP
+servers reach the same tool functions with no adapter between them. Tools call
+the service and model layer directly and never make an HTTP request back to
+this API — which is why adding a second transport meant writing a server rather
+than rewriting tools.
+
+**Two registries, never one with a role flag.** Patient tools and doctor tools
+are separate lists, in separate processes, under separate auth; each server
+refuses to start if a tool from the other side appears in its registry. Every
+call goes through a runner that writes an audit row, so no tool result reaches a
+model unlogged.
 
 ## Running locally
 
@@ -136,6 +187,7 @@ Full templates are in each app's `.env.example`. Summary:
 | `ALLOWED_ORIGINS` | Comma-separated CORS allowlist |
 | `GEMINI_API_KEY` | Google Gemini key for the AI assistant |
 | `GEMINI_MODEL` | Gemini model id (default `gemini-3.6-flash`) |
+| `REDIS_URL` | Optional. Rate limits, confirmation tokens, the daily model budget and the waitlist queue use Redis when set; without it they run in memory and a restart clears them |
 
 **frontend/.env** and **admin/.env**
 
@@ -164,12 +216,11 @@ Cloudinary and Resend are optional: if unset, image uploads and emails are skipp
   - **Email deliverability:** the demo uses Resend's shared test domain, which only delivers to the project owner's address. Arbitrary visitors therefore can't self-verify by email — hence the pre-seeded, pre-verified demo patient. A verified custom domain removes this limitation.
   - **Database SSL / IP allowlist:** the managed database connection disables CA verification (`DB_SSL_REJECT_UNAUTHORIZED=false`) and uses an open IP allowlist, because the free hosting tier lacks static egress IPs and its CA isn't in Node's default trust store. The connection is still encrypted. A production deployment would provide the CA certificate and restrict the allowlist.
   - **Free-tier hosting pauses:** the API and managed database both run on free tiers that sleep during inactivity. The first request after a pause incurs a cold start (see the note above), and if the database is mid-restart the API retries the connection on startup rather than crashing. Paid hosting would remove the pauses entirely.
-- **Dependency advisories:** `npm audit` reports two remaining items. One is a React Router advisory affecting *React Server Components mode*, which this client-side SPA does not use; no fixed version exists in the current line. The other is an ESLint dev-dependency chain that never ships to the browser or server. Neither is exploitable in this app's context.
+- **Dependency advisories:** run `npm audit` in each package for the current set. Outstanding items and why they are accepted are tracked under *Known issues* in `docs/agent-plan.md`, rather than restated here where they go stale.
 
 ## Future work
 
 - Online payment integration (the schema includes `payment` / `payment_method` scaffolding for this).
-- An AI assistant integrated into the booking flow.
 
 ## License
 

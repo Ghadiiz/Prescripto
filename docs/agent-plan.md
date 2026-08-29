@@ -132,6 +132,19 @@ not lost; none blocks the current phase.
   here because no increment needed an admin ctx; the fix is the same three
   lines whenever one does.
 
+- **The README is deliberately minimal until the end of the project.**
+  6.5 did only enough to stop it being actively wrong — the architecture
+  diagram plus the sections that contradicted it. It still has no assistant
+  section, an incomplete feature list, and no current dependency triage.
+
+  **Final README polish** — a full assistant section (the eight rules, the two
+  MCP servers, the guardrails, the audit log), the complete feature list, the
+  final structure, and a real dependency-advisory triage — is done ONCE at
+  end-of-project, as part of the portfolio/debrief pass, after every phase is
+  complete. Doing it sooner means writing prose about a system still changing
+  under it. **Any future README-touching work defers here** rather than being
+  done piecemeal. *Recorded during 6.5.*
+
 - **"Try it out" is disabled in the API docs, and the Authorize button is
   decorative.** Swagger UI's in-page requests carry the docs page's OWN origin,
   which is not in `ALLOWED_ORIGINS` — that list holds the two frontends.
@@ -1167,8 +1180,30 @@ Each of these maps to an explicit line on the target job description.
         full sequence, both smokes, the ratchet in all three directions, all
         four lockfiles `npm ci`-clean, and the Docker build.
 
-- [ ] **6.5** Architecture diagram in the README — the one-tool-layer,
+- [x] **6.5** Architecture diagram in the README — the one-tool-layer,
       two-consumers shape.
+      - **Mermaid, in a fenced block.** GitHub renders it natively, it lives in
+        the diff as text, and there is no binary asset to drift from the code.
+      - **Derived from imports, then checked mechanically.** A script asserts
+        every module named in the diagram exists, every arrow is a real import,
+        the tool counts match the registries at check time (7 patient / 6
+        read-only, 4 doctor), and no file under `tools/` or `doctorTools/`
+        contains `fetch` or `axios` — rule 1, drawn and verified.
+      - **The README contradicted the diagram, so the contradictions were
+        fixed — and only those.** It listed the AI assistant under *Future
+        work* while also listing `GEMINI_API_KEY` in its env table, and never
+        mentioned MCP, Redis, BullMQ or the OpenAPI docs. Corrected: Future
+        work, Tech stack, Project structure (`mcp/`, `scripts/`, `docs/`),
+        `REDIS_URL` added to the env table as optional.
+      - The **Dependency advisories** paragraph claimed two specific items (a
+        React Router RSC advisory and an ESLint chain) that `npm audit` no
+        longer reports — it now shows brace-expansion, js-yaml, nanoid and
+        postcss in `frontend/`. Replaced with a durable pointer to Known issues
+        rather than fresh specifics that would go stale again.
+      - *A false alarm from my own checker, not the diagram:* the
+        "every node is defined" assertion anchored to line start, while Mermaid
+        defines nodes inline on the right of an arrow — so it reported all 14
+        nodes as undefined. The check was wrong; the diagram was not.
 - [ ] **6.6** `config/mysql.js`: `createConnection` → `createPool`, fixing the
       no-mid-session-reconnect issue in Known issues.
       - **Deferred out of 6.1 deliberately.** That entry used to say 6.1 was
