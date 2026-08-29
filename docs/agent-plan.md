@@ -1541,10 +1541,18 @@ rules moved from review to the linter (6.10).
 
 ## Phase 7 — Time-aware availability and actionable notifications
 
-Enhancements that came out of the Phase 5 live end-to-end test. **None of these
-is a bug** — the current behaviour is correct, just less capable. A notification
-that says "a slot opened on Aug 30" is true and useful; it is simply not as
-useful as one that says "a 10:30 slot opened, click to book it".
+Enhancements that came out of the Phase 5 live end-to-end test, plus one
+defect found in live testing after the Phase 6 go-live.
+
+**7.1-7.4 are not bugs** — the current behaviour is correct, just less capable.
+A notification that says "a slot opened on Aug 30" is true and useful; it is
+simply not as useful as one that says "a 10:30 slot opened, click to book it".
+
+**7.5 IS a real defect**, and it is the reason this phase gained a fifth
+increment: a patient successfully joined a waitlist for a doctor they already
+had a same-day appointment with. Nothing failed, which is what makes it worth
+fixing — the assistant did exactly what it was asked and produced a redundant,
+confusing result.
 
 The theme is TIME. Phase 5 reasons about availability at the granularity of a
 DATE: `check_availability` returns a count per date, the waitlist stores a date
@@ -1559,10 +1567,19 @@ uses.
   notification is simply lost.
 - 7.4 changes the 5.1 schema and its unique constraint, which wants **6.4's CI**
   guarding it rather than a migration verified by hand.
-- All four refine the core Phase 5 booking and waitlist flow, so they come
+- All five refine the core Phase 5 booking and waitlist flow, so they come
   before the optional RAG add-on that adds a different kind of retrieval.
 
-Ordered cheapest-first: the frontend win leads, the schema change goes last.
+Ordered cheapest-first for 7.1-7.4: the frontend win leads, the schema change
+goes last. **7.5 sits after all of them for a different reason** — it consumes
+7.3 and 7.4 rather than being the most expensive.
+
+> **A HARD CONSTRAINT that governs all waitlist gating, stated once here and
+> again in 7.5:** any check about "you already have an appointment" filters on
+> the SPECIFIC `doctor_id` being waitlisted, and must never surface or require
+> action on an appointment with a DIFFERENT doctor. Telling a patient to cancel
+> some other doctor's appointment would be a nonsensical and alarming bug. The
+> query binds `doctor_id` first and cannot widen across doctors.
 
 - [ ] **7.1** **Actionable notification click-through.** Clicking a notification
       navigates to the doctor's booking page with the date pre-filled, instead
@@ -1631,6 +1648,69 @@ Ordered cheapest-first: the frontend win leads, the schema change goes last.
       - Interacts with 7.2's dedupe decision and with 7.3's per-slot data: all
         three are the same move to half-hour granularity, seen from the
         notification, the query and the schema.
+
+- [ ] **7.5** **Waitlist aware of existing appointments** — the capstone.
+      **Depends on 7.3 and 7.4; comes after both.**
+      - **Found in live testing of the Phase 6 go-live:** a patient
+        successfully joined a waitlist for a doctor they ALREADY had a same-day
+        appointment with. Redundant and confusing. `join_waitlist` knows
+        nothing about what the patient already holds, and nothing about whether
+        the time they are asking about is even taken.
+      - This increment makes `join_waitlist` aware of both, and enforces a
+        **one-appointment-per-doctor invariant**.
+
+      **The flow, when a patient asks to waitlist a specific time with a
+      doctor:**
+
+      1. **Check the patient's existing appointments WITH THAT DOCTOR ONLY.**
+         Scoped to the doctor being waitlisted — see the constraint below.
+      2. **If they already hold an appointment with that doctor:** say so, with
+         the existing date and time, and explain the rule — one appointment per
+         doctor; to waitlist a different time with this doctor they must cancel
+         the current one first, through the app. Two separate appointments with
+         the same doctor requires a separate account. **Do not proceed with the
+         join while the conflict stands.**
+      3. **Check whether the requested slot is actually TAKEN**, using 7.3's
+         time-aware availability. If it is FREE there is nothing to waitlist —
+         say it is available to book. (The one-per-doctor rule applies there
+         too: booking it must not create a second appointment with that
+         doctor.) **Only offer a waitlist for a genuinely unavailable slot.**
+      4. **The join proceeds only once no conflicting appointment remains.**
+
+      **The invariant is STRUCTURAL, not advisory.** The assistant refuses
+      while the conflict exists; it does not warn and continue. A rule the
+      model may talk its way past is not a rule.
+
+      **THE PER-DOCTOR SCOPING IS A HARD REQUIREMENT.** If the patient has a
+      10am with Dr. Richard James and also an appointment with Dr. Sara Ahmed,
+      and asks to waitlist Dr. Richard James, the assistant looks ONLY at the
+      Richard James appointment. It must not mention the Sara Ahmed one, and
+      must certainly not ask them to cancel it. `doctor_id` is bound first and
+      the query is un-widenable across doctors — the same discipline rule 6
+      imposes on the doctor tools, applied here because the failure mode is
+      just as bad: alarming a patient about an appointment that was never in
+      question.
+
+      **Hard design constraints:**
+
+      - **The assistant performs NO cancellation.** It INSTRUCTS the patient to
+        cancel in the app; the patient acts. `join_waitlist` remains the ONLY
+        write tool (rule 2), and the 1.8 guardrail suite still fails if a
+        second `mutates: true` appears. Adding a cancel tool would be a major
+        security expansion — a new destructive write path needing its own
+        confirmation, audit and rule-6 treatment — and it is unnecessary:
+        telling the patient to cancel is simpler and safer.
+      - The existing-appointment check reads through the established
+        rule-compliant path: identity from `ctx` (rule 3, never an argument),
+        explicit column list (rule 4 — now machine-enforced by 6.10's
+        `no-select-star`), scoped to the one doctor.
+      - It **ENRICHES 5.3's two-phase confirmation preview** rather than adding
+        a separate gate. The patient already sees what they are agreeing to
+        before it happens; this makes that preview tell the truth about
+        conflicts and availability.
+      - **Depends on 7.3** to know whether the requested slot is taken, and on
+        **7.4** so that "waitlist a specific time" exists at all. It is the
+        capstone that ties the existing-appointment logic to both.
 
 ---
 
