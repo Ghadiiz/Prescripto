@@ -132,6 +132,23 @@ not lost; none blocks the current phase.
   here because no increment needed an admin ctx; the fix is the same three
   lines whenever one does.
 
+- **"Try it out" is disabled in the API docs, and the Authorize button is
+  decorative.** Swagger UI's in-page requests carry the docs page's OWN origin,
+  which is not in `ALLOWED_ORIGINS` — that list holds the two frontends.
+  Measured: a POST carrying the API's own origin is rejected with **403**
+  before reaching a handler, while the same POST from the patient app reaches
+  it and answers 401. So the button would be present and always fail.
+
+  Enabling it would mean adding the API's own origin to the production CORS
+  policy — widening a security control to make a documentation convenience
+  work. **Deliberately not done**, and the docs page says so instead.
+
+  The **Authorize** button is kept, because dropping the security scheme would
+  also drop the documentation of which endpoints need auth. It is safe but
+  inert: `persistAuthorization` is off, and the page was verified to write
+  nothing to `localStorage` or `sessionStorage`, so a token pasted there is
+  never sent anywhere and does not survive a reload. *Recorded during 6.3.*
+
 - **Two high-severity npm audit findings, both pre-existing.** `npm audit` in
   `backend/` reports `ip-address` (via **express-rate-limit**) and
   `brace-expansion` (via **nodemon**, a devDependency). Checked against the
@@ -1069,8 +1086,43 @@ Each of these maps to an explicit line on the target job description.
         the retry-limit test asserted against the same constant its mutation
         changed, and one mutation produced non-parsing code — a compile error
         is not a caught mutation.
-- [ ] **6.3** `swagger-jsdoc` + `swagger-ui-express`. Document **the whole API**,
+- [x] **6.3** `swagger-jsdoc` + `swagger-ui-express`. Document **the whole API**,
       not just the assistant. Served at `/api/docs`.
+      - **All 47 endpoints across 7 routers**, annotated inline beside each
+        route so a doc comment changes when the route it describes changes.
+        Shared schemas and the six generic error responses live in
+        `src/docs/openapi.js`.
+      - **Public in production, and contract-only.** The docs say what a caller
+        may send and what they may get back. They deliberately do NOT describe
+        the assistant's guardrails, which claims the auth middleware checks or
+        in what order, the confirmation mechanics behind `join_waitlist`, or
+        the 401 TAXONOMY — a client needs to know a 401 is possible, not how to
+        tell an expired token from a forged one from the wrong role. A
+        forbidden-vocabulary test over the serialised spec enforces this.
+      - **Examples are asserted synthetic, not merely written carefully.** The
+        spec is scanned for JWT-shaped strings, for any address outside
+        `@example.invalid`, and for the seed's real domains by name.
+      - **Coverage is enumerated from the REAL router stacks**, both ways: no
+        served endpoint undocumented, and no documented endpoint that is not
+        served. `src/routes.js` is the single mount table that `server.js`
+        mounts from and the test walks, so a router added to the app is a
+        router the test checks. Needed because **Express 5 does not expose a
+        mounted layer's prefix** (`layer.regexp` is `undefined` on 5.2.1), so
+        full paths cannot be recovered from the app object.
+      - **Mounted ABOVE the readiness gate**, so the docs answer during the
+        ~50-second cold boot when someone is most likely loading them to check
+        whether the API is alive. Tested through the real `server.js` with the
+        database pointed at a dead port — `/api/docs.json` answers 200 while
+        `/api/doctors` answers 503, the 503 being the control that proves the
+        gate is active rather than inert.
+      - *A hollow test of my own, caught by mutation:* the first version of
+        that check built its own app, so moving the mount below the gate left
+        it passing 10/10. It proved `mountApiDocs` needs no database, which is
+        not the claim.
+      - *A bug the count assertion caught:* `resolve()` yields Windows
+        backslashes and glob reads those as escapes, so the recursive pattern
+        matched nothing and the spec built with **one** path instead of 47 —
+        silently, because a glob matching no files is not an error.
 - [ ] **6.4** GitHub Actions: lint, test, docker build on every push.
 - [ ] **6.5** Architecture diagram in the README — the one-tool-layer,
       two-consumers shape.

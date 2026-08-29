@@ -6,13 +6,8 @@ import { closeRedis } from './src/config/redis.js';
 import { createWaitlistWorker, closeWaitlistWorker } from './src/queue/waitlistWorker.js';
 import { closeWaitlistQueue } from './src/queue/waitlistQueue.js';
 import { connectCloudinary } from './src/config/cloudinary.js';
-import authRoutes from './src/auth/routes/authRoutes.js';
-import doctorRoutes from './src/doctors/routes/doctorRoutes.js';
-import appointmentRoutes from './src/appointments/routes/appointmentRoutes.js';
-import adminRoutes from './src/admin/routes/adminRoutes.js';
-import doctorPanelsRoutes from './src/doctors/routes/doctorPanelRoutes.js';
-import assistantRoutes from './src/assistant/assistantRoutes.js';
-import notificationRoutes from './src/notifications/routes/notificationRoutes.js';
+import { API_ROUTES } from './src/routes.js';
+import { mountApiDocs } from './src/docs/serveDocs.js';
 import { notFound, errorHandler } from './src/middleware/errorHandler.js';
 import { databaseReady } from './src/middleware/databaseReady.js';
 import { AppError } from './src/utils/AppError.js';
@@ -62,18 +57,25 @@ app.get('/', (req, res) => {
   res.send('Prescripto API is running...');
 });
 
+// ABOVE the readiness gate, deliberately (6.3).
+//
+// The docs are a static document and touch no database. Mounted below the gate
+// they would answer 503 for the whole cold-boot window -- up to ~50 seconds on
+// Render while a sleeping managed database wakes -- which is exactly when
+// someone is most likely to be loading them to check whether the API is alive.
+mountApiDocs(app);
+
 // Everything below needs the database. connectDB() above is intentionally not
 // awaited so the port binds immediately; this gate covers the window until it
 // resolves, answering 503 instead of letting getDB() throw into a 500.
 app.use('/api', databaseReady);
 
-app.use('/api/auth', authRoutes);
-app.use('/api/doctors', doctorRoutes);
-app.use('/api/appointments', appointmentRoutes);
-app.use('/api/admin', adminRoutes);
-app.use('/api/doctor', doctorPanelsRoutes);
-app.use('/api/assistant', assistantRoutes);
-app.use('/api/notifications', notificationRoutes);
+// Mounted from the shared table in src/routes.js, which the documentation
+// coverage test also walks -- so a router added here is a router that test
+// checks for documentation.
+for (const { prefix, router } of API_ROUTES) {
+  app.use(prefix, router);
+}
 
 app.use(notFound);
 app.use(errorHandler);
