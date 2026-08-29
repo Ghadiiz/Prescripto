@@ -326,6 +326,35 @@ test('follow-up counts completed visits and is scoped to this doctor', async () 
   assert.equal(result.patients[0].days_since, 60);
 });
 
+// 6.10 turned `LIMIT ${safeLimit}` into a bound `LIMIT ?`. Every other test
+// here leaves `limit` at its default, so none of them would notice if the
+// placeholder stopped being honoured — or if appending the limit to the
+// parameter array had shifted the four that were already there.
+test('the follow-up limit is honoured as a bound parameter', async () => {
+  await book({
+    patient: alice,
+    date: daysAhead(-90),
+    time: '10:00:00',
+    status: APPOINTMENT_STATUS.COMPLETED,
+  });
+  await book({
+    patient: bob,
+    date: daysAhead(-60),
+    time: '10:30:00',
+    status: APPOINTMENT_STATUS.COMPLETED,
+  });
+
+  // Both qualify, longest wait first.
+  assert.deepEqual(await followupNames(), ['Alice Fixture', 'Bob Fixture']);
+
+  // And the limit cuts the list rather than being ignored.
+  assert.deepEqual(await followupNames({ limit: 1 }), ['Alice Fixture']);
+  assert.deepEqual(await followupNames({ limit: 2 }), [
+    'Alice Fixture',
+    'Bob Fixture',
+  ]);
+});
+
 // --- stats --------------------------------------------------------------------
 
 test('my_stats counts only this doctor and sums the fee actually charged', async () => {

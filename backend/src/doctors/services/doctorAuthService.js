@@ -81,24 +81,30 @@ export const getDoctorProfile = async (doctorId) => {
   };
 };
 
+// The columns a doctor may change about themselves, mapped to their fixed SET
+// fragments. This replaces an `allowedFields` array paired with a
+// `${key} = ?` template: the allowlist and the SQL were two lists that had to
+// agree, and the statement's text came partly from the request body. Now there
+// is one list, and the key only chooses among strings written here.
+const UPDATABLE_COLUMNS = {
+  name: 'name = ?',
+  about: 'about = ?',
+  fees: 'fees = ?',
+  address_line1: 'address_line1 = ?',
+  address_line2: 'address_line2 = ?',
+  available: 'available = ?',
+};
+
 export const updateDoctorProfile = async (doctorId, updates) => {
   const db = getDB();
 
-  const allowedFields = [
-    'name',
-    'about',
-    'fees',
-    'address_line1',
-    'address_line2',
-    'available',
-  ];
   const updateFields = [];
   const values = [];
 
-  for (const [key, value] of Object.entries(updates)) {
-    if (allowedFields.includes(key) && value !== undefined) {
-      updateFields.push(`${key} = ?`);
-      values.push(value);
+  for (const column of Object.keys(UPDATABLE_COLUMNS)) {
+    if (updates[column] !== undefined) {
+      updateFields.push(UPDATABLE_COLUMNS[column]);
+      values.push(updates[column]);
     }
   }
 

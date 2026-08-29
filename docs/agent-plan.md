@@ -1035,9 +1035,15 @@ runners, separate token files, separate processes.
 
 ---
 
-## Phase 6 — Infrastructure
+## Phase 6 — Infrastructure — **COMPLETE** (10/10)
 
 Each of these maps to an explicit line on the target job description.
+
+All ten increments are done: Redis (6.1), the BullMQ queue (6.2), OpenAPI docs
+(6.3), CI (6.4), the architecture diagram (6.5), the connection pool and
+mid-session recovery (6.6), backend and mcp linting (6.7), the frontend test
+runner (6.8), zero lint errors across all four packages (6.9), and the two SQL
+rules moved from review to the linter (6.10).
 
 - [x] **6.1** Redis: the assistant's in-memory state moved off-process — the
       per-user **rate limiter**, the **confirmation tokens** (5.3) and the
@@ -1439,7 +1445,7 @@ Each of these maps to an explicit line on the target job description.
         comment, which said the frontends would not lint clean for a while, was
         corrected rather than left to mislead.
 
-- [ ] **6.10** Parameterised-query lint rule: allowlist the known-safe
+- [x] **6.10** Parameterised-query lint rule: allowlist the known-safe
       interpolation patterns and flag dangerous value interpolation.
       - The strongest CLAUDE.md rule to make machine-checkable — "parameterised
         queries only, never string-concatenated SQL" is currently held by review
@@ -1454,6 +1460,83 @@ Each of these maps to an explicit line on the target job description.
         config adoption**: deciding which interpolations are provably
         code-controlled is the work, and a half-done version that fires on
         correct code is worse than none.
+
+      *Built as two local rules in `scripts/eslint-rules/`, registered as an
+      inline plugin in both `backend/` and `mcp/` — no new dependency, and no
+      published package for two rules that only make sense here.*
+
+      - **`no-sql-string-interpolation`.** Fires on a `.query()`/`.execute()`
+        call and permits only text it can PROVE is fixed in the source:
+        module-level constants, `arr.join('<literal>')` where every value that
+        reached `arr` is a literal, and lookups into a map whose values are all
+        literals. The test is "can the linter prove this", not "does this look
+        safe" — a runtime guard like `allowedFields.includes(key)` is a real
+        defence but not a provable one.
+      - **`no-select-star`, scoped to `backend/src/assistant/**`.** `SELECT *`
+        appears **19 times** in auth/admin/doctors, legitimately — those flows
+        need the password hash the tools must never see — and zero times in the
+        assistant tree, so the scoped rule starts green. Package-wide it would
+        have needed 19 disable comments on day one, which is how a rule stops
+        being read. It distinguishes a column star from `COUNT(*)`, and catches
+        a qualified `a.*`.
+
+      *Three sites were restructured so the rule proves rather than assumes.
+      All three are behaviour-neutral and were verified as such:*
+
+      - `doctorScheduleQueries.js` — `LIMIT ${safeLimit}` became a bound
+        `LIMIT ?`. Checked against the real database first: `query()` accepts a
+        NUMERIC limit parameter, **a string parameter is an `ER_PARSE_ERROR`,
+        and `execute()` rejects a LIMIT placeholder outright** — so this works
+        only because every call site in the repo uses `query()`. The clamp
+        stays; it now guards a value that is no longer part of the SQL text.
+
+        **This is a latent trap, so it is written down rather than left in a
+        commit message.** A future change that switches this call to `execute()`
+        — for prepared statements, or because a driver upgrade makes it the
+        default — breaks it at RUNTIME with `ER_WRONG_ARGUMENTS`, not at lint
+        or build time. Passing the limit as a string breaks it the same way.
+        The linter cannot see either, so the follow-up test added for the bound
+        limit is what would catch it.
+      - `doctorAuthService.js` — a SET fragment built as `${key} = ?` became a
+        lookup into a module-level map of column to literal SET fragment. The
+        old `allowedFields` array and the SQL were two lists that had to agree;
+        now there is one.
+      - `userModel.updateUser` — **this one was not in the plan.** The rule
+        found it: the function took an array of already-built SQL fragments
+        from `authService`, so the model executed whatever a service handed it
+        and the statement's safety lived two modules away. It now takes a plain
+        object of column to value and owns its own SQL.
+
+      *And the rule found a blind spot in itself.* The first version only
+      inspected inline template literals, which would have said nothing about
+      the **ten call sites** that build SQL into a variable
+      (`let query = ...; if (status) query += ' AND a.status = ?';`). That
+      would have made it a rule about coding style rather than about SQL, so an
+      identifier argument is now resolved to every assignment that can reach
+      it. The same first version also reported the string-literal `+`
+      concatenations used to wrap long queries across lines — a false positive
+      that would have earned the rule a disable comment within a week.
+
+      - **One exception, in the config rather than as an inline disable** so it
+        is visible to anyone reading the lint setup and cannot spread:
+        `database/migrate.js` reads a `.sql` file and executes it. That is the
+        entire job of a migration runner, the text comes from a file committed
+        to this repository, and no shape would make it provable.
+      - **Verification.** A `RuleTester` suite (27 cases) run under
+        `node:test`; five mutations of the rule and five of the codebase, all
+        caught — including that `SELECT *` outside the scoped tree stays
+        silent, which is the scoping working rather than the rule failing.
+      - **The profile-update paths had NO test coverage**, so the restructure
+        was verified directly against the database: field-by-field writes, the
+        deliberate asymmetry where an empty name is ignored but an empty
+        address line is written, a column outside the map being ignored, and
+        the 400 on an empty update. A throwaway user was created and deleted; a
+        doctor row was snapshotted and restored.
+      - A test was added for the bound `LIMIT ?`, because every existing
+        follow-up test leaves `limit` at its default and so would not have
+        noticed the placeholder being ignored — or the appended parameter
+        shifting the four already there. Mutating the parameter order fails
+        exactly that one test.
 ---
 
 ## Phase 7 — Time-aware availability and actionable notifications

@@ -2,6 +2,8 @@ import js from '@eslint/js';
 import globals from 'globals';
 import { defineConfig, globalIgnores } from 'eslint/config';
 
+import localRules from '../scripts/eslint-rules/no-sql-string-interpolation.js';
+
 // The same config as backend/eslint.config.js — mcp/ is its own npm root, so it
 // needs its own, but the rules are deliberately identical.
 //
@@ -14,6 +16,7 @@ export default defineConfig([
   {
     files: ['**/*.js', '**/*.mjs'],
     extends: [js.configs.recommended],
+    plugins: { local: localRules },
     languageOptions: {
       ecmaVersion: 'latest',
       sourceType: 'module',
@@ -35,6 +38,13 @@ export default defineConfig([
           message: 'ESM imports only (CLAUDE.md). Use import, not require().',
         },
       ],
+
+      // There is no SQL in this package and there should never be — the
+      // servers reach the database through the backend's service layer. The
+      // rule is registered anyway so that if SQL ever appears here it is held
+      // to the same standard on arrival, rather than being the one place the
+      // check does not run.
+      'local/no-sql-string-interpolation': 'error',
     },
   },
 ]);

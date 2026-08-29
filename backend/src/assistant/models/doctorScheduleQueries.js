@@ -123,12 +123,19 @@ export const findPatientsNeedingFollowup = async (
       GROUP BY a.user_id, u.name
      HAVING days_since >= ?
       ORDER BY days_since DESC
-      LIMIT ${safeLimit}`,
+      LIMIT ?`,
+    // `safeLimit` is a parameter rather than interpolated text. The clamp above
+    // still runs — it is what keeps the value sane — but the limit is no longer
+    // part of the statement, so its safety no longer depends on the clamp being
+    // correct. This works because every call site in the repo uses `query()`:
+    // mysql2 escapes a NUMERIC limit correctly there, while a string parameter
+    // is a parse error and `execute()` rejects a LIMIT placeholder outright.
     [
       doctorId,
       APPOINTMENT_STATUS.COMPLETED,
       APPOINTMENT_STATUS.CANCELLED,
       sinceDays,
+      safeLimit,
     ],
   );
 

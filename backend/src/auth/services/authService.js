@@ -144,39 +144,35 @@ export const getUserProfileService = async (userId) => {
 export const updateUserProfileService = async (userId, data) => {
   const { name, phone, address_line1, address_line2, gender, dob } = data;
 
-  const updates = [];
-  const values = [];
+  // Column -> new value. The mixed conditions are deliberate and unchanged:
+  // the address lines and phone clear on an empty string, while name, gender
+  // and dob only change when something was actually supplied.
+  const fields = {};
 
   if (name) {
-    updates.push('name = ?');
-    values.push(name);
+    fields.name = name;
   }
   if (phone !== undefined) {
-    updates.push('phone = ?');
-    values.push(phone);
+    fields.phone = phone;
   }
   if (address_line1 !== undefined) {
-    updates.push('address_line1 = ?');
-    values.push(address_line1);
+    fields.address_line1 = address_line1;
   }
   if (address_line2 !== undefined) {
-    updates.push('address_line2 = ?');
-    values.push(address_line2);
+    fields.address_line2 = address_line2;
   }
   if (gender) {
-    updates.push('gender = ?');
-    values.push(gender);
+    fields.gender = gender;
   }
   if (dob) {
-    updates.push('dob = ?');
-    values.push(dob);
+    fields.dob = dob;
   }
 
-  if (updates.length === 0) {
+  if (Object.keys(fields).length === 0) {
     throw new AppError('No fields to update', 400);
   }
 
-  const user = await userModel.updateUser(userId, updates, values);
+  const user = await userModel.updateUser(userId, fields);
 
   return {
     _id: user.id.toString(),
