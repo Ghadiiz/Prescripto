@@ -94,21 +94,40 @@ not lost; none blocks the current phase.
   against it independently (`reason: 'date_in_past'`), so the assistant is not
   affected. *Found during 1.4.*
 
-- **No mid-session database reconnect — affects the WHOLE APP, not just the
-  assistant.** Every endpoint shares one connection, so this is a general
-  availability limitation rather than an assistant-layer detail.
+- **RESOLVED in 6.6 — no mid-session database reconnect, which affected the
+  WHOLE APP rather than just the assistant.** Every endpoint shared one
+  connection, so this was a general availability limitation.
 
-  `config/mysql.js` uses `createConnection` (a single connection, not a pool);
-  the retry loop in `connectDB` runs only at startup, mysql2 does not
-  auto-reconnect, and `isReady` is set true once and never cleared. If the connection drops while
-  running, every query throws until the process restarts **and 0.7's readiness
-  gate still reports ready**, so callers get 500s rather than the 503 that
-  situation deserves. 0.7 fixed the startup race only. Switching to
-  `mysql.createPool` would fix it (a pool replaces dead connections
-  transparently). **Scheduled as 6.6.** This entry previously named 6.1 as the
-  natural home "since it already reworks this layer for Redis" — that premise
-  was wrong and was corrected when 6.1 was built: the Redis work never touches
-  `config/mysql.js`. *Found during 1.7.*
+  `config/mysql.js` used `createConnection` (a single connection, not a pool);
+  the retry loop in `connectDB` ran only at startup, mysql2 does not
+  auto-reconnect, and `isReady` was set true once and never cleared. If the
+  connection dropped while running, every query threw until the process
+  restarted **and 0.7's readiness gate still reported ready**, so callers got
+  500s rather than the 503 the situation deserved. 0.7 fixed the startup race
+  only.
+
+  **Fixed in 6.6, in three parts:**
+
+  1. `mysql.createPool` — a pool replaces dead connections transparently, so a
+     dropped connection is no longer fatal for the process.
+  2. The **central error handler** notes connection-level failures and marks
+     the database not-ready, answering 503 — so readiness reflects reality
+     instead of being set once at boot.
+  3. `databaseReady` re-probes with a `SELECT 1` before refusing, **throttled
+     and driven by traffic** rather than a timer, and restores readiness when
+     the database answers again.
+
+  **Pinned by tests that cause a real outage:** an opt-in suite stops a
+  throwaway MySQL container, asserts queries fail and readiness goes false,
+  starts it, and asserts the same process recovers with no restart. Reverting
+  to `createConnection` fails five of its nine tests; removing the
+  error-handler call fails the middleware wiring test. A duplicate key is
+  asserted NOT to count as an outage.
+
+  *Found during 1.7, fixed in 6.6.* (An earlier version of this entry named 6.1
+  as the natural home "since it already reworks this layer for Redis" — that
+  premise was wrong and was corrected when 6.1 was built: the Redis work never
+  touches `config/mysql.js`.)
 
 - **RESOLVED in 5.6 — `doctorAuthMiddleware` could not tell a misconfigured
   server from a forged token.** It called `jwt.verify(token,
@@ -1204,8 +1223,40 @@ Each of these maps to an explicit line on the target job description.
         "every node is defined" assertion anchored to line start, while Mermaid
         defines nodes inline on the right of an arrow — so it reported all 14
         nodes as undefined. The check was wrong; the diagram was not.
-- [ ] **6.6** `config/mysql.js`: `createConnection` → `createPool`, fixing the
+- [x] **6.6** `config/mysql.js`: `createConnection` → `createPool`, fixing the
       no-mid-session-reconnect issue in Known issues.
+      - **Safe as a drop-in, checked before the change rather than assumed
+        after it.** A pool only works if nothing depends on queries sharing a
+        session: verified there are no transactions, no `LAST_INSERT_ID()` read
+        as a separate statement (the code uses `result.insertId`), and no
+        `SET @var`, temporary tables or `LOCK TABLES` anywhere in `backend/` or
+        `mcp/`. `migrate.js` and `seed.js` keep their own single connections —
+        a one-shot script wants exactly one.
+      - **Readiness can now go back to FALSE**, which was the half of the bug a
+        pool alone does not fix. The **central error handler** — the one place
+        that already sees every thrown error — marks the database unreachable
+        on a connection-level failure and answers 503; `databaseReady` then
+        re-probes with a `SELECT 1`, **throttled and triggered by traffic**
+        rather than by a timer, since the codebase avoids `setInterval`.
+      - **A duplicate key is not an outage.** Only connection-level codes flip
+        readiness — `ER_DUP_ENTRY` means the database answered perfectly well,
+        and treating it as a fault would take the app down for a booking
+        collision. Its own test.
+      - `connectionLimit: 10`, deliberately modest: Aiven's smallest plan caps
+        connections in the low tens and that ceiling is shared. `enableKeepAlive`
+        because managed databases drop idle sockets silently.
+      - **Proved against a real outage**, not argued: an opt-in suite
+        (`DB_RECOVERY_TEST=1`, the skip shape `redisStores.test.js` uses — it
+        stops a container, so it must never run in `npm test` or CI) stops a
+        throwaway MySQL, watches queries fail and readiness go false, starts it
+        again, and asserts **the same Node process recovers with no restart**.
+      - *Two defects in my own tests, found and fixed:* a "pure logic" test
+        flipped module readiness as a side effect and broke the two tests after
+        it — confirmed by running the failure in isolation, where it passed.
+        And the outage test called `noteConnectionFailure` directly, so
+        deleting the call from the error handler would have left it green;
+        middleware-level tests now cover the wiring, and that mutation is
+        caught by them.
       - **Deferred out of 6.1 deliberately.** That entry used to say 6.1 was
         its natural home "since it already reworks this layer" — which turned
         out to be false: the Redis work never touches `config/mysql.js`. This

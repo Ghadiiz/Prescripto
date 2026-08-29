@@ -1,4 +1,4 @@
-import { isDBReady } from '../config/mysql.js';
+import { isDBReady, refreshReadiness } from '../config/mysql.js';
 
 // `connectDB()` is deliberately not awaited in server.js, so the port binds
 // immediately and platform health checks pass. This gate covers the window
@@ -9,8 +9,16 @@ import { isDBReady } from '../config/mysql.js';
 // Without it, requests reach getDB(), which throws a plain Error. That is not
 // an AppError, so the central handler reports it as a generic 500 and the
 // caller cannot tell a booting server from a broken one.
-export const databaseReady = (req, res, next) => {
+export const databaseReady = async (req, res, next) => {
   if (isDBReady()) {
+    return next();
+  }
+
+  // Not ready. Since 6.6 that can mean "was ready, then the database went
+  // away" as well as "still starting up", so try once before refusing —
+  // throttled inside refreshReadiness, so a burst during an outage costs one
+  // probe rather than one per request.
+  if (await refreshReadiness()) {
     return next();
   }
 
