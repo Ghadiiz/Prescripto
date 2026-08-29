@@ -3,7 +3,7 @@ import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { AppContext } from '../context/AppContext';
 import { assets } from '../assets/assets';
 import RelatedDoctors from '../components/RelatedDoctors';
-import { isCalendarDate, toLocalDateString } from '../utils/dates';
+import { isCalendarDate, isSlotTime, toLocalDateString } from '../utils/dates';
 import axios from 'axios';
 import { toast } from 'react-toastify';
 
@@ -24,6 +24,11 @@ const Appointment = () => {
   // Anything that is not a calendar date is ignored rather than trusted.
   const requestedDate = searchParams.get('date');
   const wantedDate = isCalendarDate(requestedDate) ? requestedDate : null;
+
+  // 7.2. The half-hour the notification named. Only ever a hint: it is applied
+  // if the server still lists that slot, and quietly ignored if it does not.
+  const requestedTime = searchParams.get('time');
+  const wantedTime = isSlotTime(requestedTime) ? requestedTime : null;
 
   const [docInfo, setDocInfo] = useState(null);
   const [availableTimes, setAvailableTimes] = useState([]);
@@ -89,7 +94,16 @@ const Appointment = () => {
         },
       );
       if (data.success) {
-        setAvailableTimes(data.availableSlots || []);
+        const slots = data.availableSlots || [];
+        setAvailableTimes(slots);
+
+        // Preselect the notified slot, but ONLY on the date it belongs to and
+        // ONLY if the server still offers it. A slot taken since the notice
+        // was written just is not in this list, and the patient sees what is
+        // actually left rather than a time they cannot have.
+        if (wantedTime && date === wantedDate && slots.includes(wantedTime)) {
+          setSelectedTime(wantedTime);
+        }
       } else {
         setAvailableTimes([]);
         toast.error(data.message);

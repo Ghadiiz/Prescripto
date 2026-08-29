@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Routes, Route } from 'react-router-dom';
 import axios from 'axios';
 
@@ -165,6 +166,101 @@ describe('Appointment date generation across the UTC boundary', () => {
     await waitFor(() => expect(requestedSlotDates()).toContain('2026-08-30'));
     // The date is inside the window, so no notice.
     expect(screen.queryByText(/further ahead than/i)).not.toBeInTheDocument();
+  });
+});
+
+// 7.2. The notification names a half-hour, so the click should land on it —
+// but only if the server still offers it.
+describe('Appointment time preselection', () => {
+  const selectedTimes = () =>
+    [...document.querySelectorAll('#time-slots p')]
+      .filter((node) => node.className.includes('bg-primary'))
+      .map((node) => node.textContent.trim());
+
+  it('preselects the notified slot when the server still lists it', async () => {
+    const wanted = daysFromToday(1);
+    renderAt(`?date=${wanted}&time=${encodeURIComponent('10:30 AM')}`);
+
+    await waitFor(() => expect(selectedTimes()).toEqual(['10:30 AM']));
+  });
+
+  it('does not hold a slot the server no longer lists', async () => {
+    axios.get.mockImplementation((url) => {
+      if (String(url).includes('/api/appointments/available-slots')) {
+        // 10:30 is gone; only these remain.
+        return Promise.resolve({
+          data: { success: true, availableSlots: ['11:00 AM', '11:30 AM'] },
+        });
+      }
+      return Promise.resolve({ data: { success: true, doctor: DOCTOR } });
+    });
+    axios.post.mockResolvedValue({ data: { success: true } });
+
+    const wanted = daysFromToday(1);
+    renderAt(`?date=${wanted}&time=${encodeURIComponent('10:30 AM')}`);
+
+    await waitFor(() =>
+      expect(screen.getByText('11:00 AM')).toBeInTheDocument(),
+    );
+    expect(screen.queryByText('10:30 AM')).not.toBeInTheDocument();
+
+    // The assertion that actually bites. Checking "no chip is highlighted"
+    // CANNOT FAIL here — an unlisted slot renders no chip to highlight, so it
+    // passes whether or not the selection was made. Mutation testing caught
+    // that. What is observable is the booking attempt: if 10:30 were still
+    // held internally, this click would POST it.
+    const user = userEvent.setup();
+    await user.click(
+      screen.getByRole('button', { name: /book an appointment/i }),
+    );
+
+    expect(axios.post).not.toHaveBeenCalled();
+  });
+
+  it('books the notified slot when it IS still listed', async () => {
+    axios.post.mockResolvedValue({ data: { success: true } });
+
+    const wanted = daysFromToday(1);
+    renderAt(`?date=${wanted}&time=${encodeURIComponent('10:30 AM')}`);
+
+    await waitFor(() => expect(selectedTimes()).toEqual(['10:30 AM']));
+
+    const user = userEvent.setup();
+    await user.click(
+      screen.getByRole('button', { name: /book an appointment/i }),
+    );
+
+    // The mirror of the test above: the selection is real, not cosmetic.
+    await waitFor(() => expect(axios.post).toHaveBeenCalled());
+    expect(axios.post.mock.calls[0][1]).toMatchObject({
+      slotDate: wanted,
+      slotTime: '10:30 AM',
+    });
+  });
+
+  it('ignores a malformed time', async () => {
+    const wanted = daysFromToday(1);
+    renderAt(`?date=${wanted}&time=whenever`);
+
+    await waitFor(() =>
+      expect(screen.getByText('10:30 AM')).toBeInTheDocument(),
+    );
+    expect(selectedTimes()).toEqual([]);
+  });
+
+  it('does not apply the time to a DIFFERENT date', async () => {
+    const wanted = daysFromToday(1);
+    renderAt(`?date=${wanted}&time=${encodeURIComponent('10:30 AM')}`);
+
+    await waitFor(() => expect(selectedTimes()).toEqual(['10:30 AM']));
+
+    // Moving to another day clears it rather than carrying the notified slot
+    // to a date it was never about.
+    const user = userEvent.setup();
+    const chips = [...document.querySelectorAll('.min-w-16')];
+    await user.click(chips[3]);
+
+    await waitFor(() => expect(selectedTimes()).toEqual([]));
   });
 });
 

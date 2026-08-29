@@ -193,6 +193,8 @@ const cancelAppointment = async (
   await notifyWaitlistSafely({
     doctorId: appointment.doctor_id,
     date: appointment.appointment_date,
+    // 7.2: which half-hour opened, not just which day.
+    time: appointment.appointment_time,
     excludeUserId: userId,
   });
 
@@ -340,4 +342,10 @@ export {
   cancelAppointment,
   getAvailableSlots,
   createCheckoutPreview,
+  // Exported for 7.2. The waitlist notice names a freed TIME, and the booking
+  // page has to be able to match that string against the slot list it fetched.
+  // Both must therefore come from ONE formatter: a second implementation could
+  // drift on something as small as the zero-padded hour, and the preselection
+  // would stop working with nothing to show for it.
+  convertTo12Hour,
 };

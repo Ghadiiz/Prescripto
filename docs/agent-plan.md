@@ -1664,7 +1664,7 @@ goes last. **7.5 sits after all of them for a different reason** — it consumes
       what the test actually adds — that the two components compose, with no
       hand-written URL standing between them.
 
-- [ ] **7.2** **The freed time, not just the freed date.** The notification says
+- [x] **7.2** **The freed time, not just the freed date.** The notification says
       only which DATE opened up. The cancelled appointment has a specific
       `appointment_time`, so the notice can say *"a 10:30 slot opened with
       Dr. X on Aug 30"*.
@@ -1678,6 +1678,71 @@ goes last. **7.5 sits after all of them for a different reason** — it consumes
         than letting it follow by accident.
       - Rule 7 still holds: a named time is still a snapshot with a
         `checked_at`, never a held slot.
+
+      *No schema change and no new query, as scoped. Both cancel paths already
+      read the whole row, so the time was in hand at the call site and simply
+      never travelled.*
+
+      - **ONE formatter, on the backend.** `convertTo12Hour` — the function
+        that already writes the booking grid's slot strings — is now exported
+        and used for the payload's `slot_time`. That is the design, not a
+        convenience: the notification's time has to MATCH a string on the
+        booking page for the click-through to preselect it, and a second
+        implementation on the frontend could drift on something as small as the
+        zero-padded hour, with nothing to show for it. The frontend only ever
+        VALIDATES the shape (`isSlotTime`), never produces one.
+      - **The dedupe key stays doctor+date.** `findUsersWithUnreadSlotNotice`
+        is untouched and its 5.4 test passes unchanged — the check that the
+        guarantee was left alone. Widening it to include the time would mean a
+        doctor clearing a day sends one notification per freed slot.
+      - **The honest cost of that choice, carried by the wording.** Only one
+        unread notice exists per doctor per day, so it names the FIRST slot to
+        open, not every one. So the sentence is an event rather than an
+        inventory — *"A 10:30 AM slot opened with Dr. X on Sat, 30 Aug"* — with
+        the booking page as the only thing that knows what is free now. That is
+        rule 7 in a patient's own words: it never claims the slot is still
+        there.
+      - **The click-through completes** (7.1's other half): the URL carries
+        `&time=`, and the page preselects that slot **only if the server still
+        lists it**. A slot taken since is simply not in the list, so nothing is
+        selected and the patient sees what is actually left.
+      - **`slot_time` is optional everywhere it is read**, for two concrete
+        reasons rather than defensiveness: notices written before 7.2 have
+        none, and a job enqueued by the previous deploy reaches the new worker
+        without one. The key is OMITTED rather than set to null, so old and new
+        payloads read identically.
+
+      **A double-format bug, caught while writing it.** The queued path
+      normalises when building the job payload and the worker hands the result
+      back to the same normaliser — so `convertTo12Hour('10:30 AM')` would have
+      produced `'10:30 AM AM'`. The helper is now idempotent, which also covers
+      the deploy straddle where an old job carries a raw `'10:30:00'` and a new
+      one carries a label. Pinned by its own test.
+
+      **A test-shape change made deliberately.** `waitlistQueue.test.js`
+      asserts the job payload's keys as an EXACT SET, so that adding a patient
+      name or an email fails there rather than quietly parking PII in a third
+      party's Redis. Adding `time` fired it, exactly as intended. The list was
+      updated and the reasoning written into the test: a freed slot's clock
+      time identifies nobody, since the appointment that held it is already
+      cancelled.
+
+      **Verification.** 9 new tests (backend 301, frontend 62) and **10
+      mutations, all caught.** End to end against the real database, both
+      cancel paths: a 14:30 cancellation writes
+      `slot_time: '02:30 PM'` and an 09:00 one writes `'09:00 AM'`; the job
+      payloads sitting in Redis were read back and carry the same strings; and
+      the resulting URL was loaded in a browser, showing MON 31 selected with
+      `02:30 PM` highlighted.
+
+      *One hollow test of mine, caught by mutation testing.* "Selects nothing
+      when that slot has since been taken" asserted that no chip was
+      highlighted — which **cannot fail**, because an unlisted slot renders no
+      chip to highlight. Removing the availability check left it green. It now
+      asserts the observable consequence instead: clicking *Book* must not POST
+      a slot the server never offered. Its mirror — that a still-listed slot
+      DOES post — was added alongside, so the selection is proven real rather
+      than cosmetic.
 
 - [ ] **7.3** **Specific-slot availability answers.** `check_availability`
       returns a free-slot COUNT plus `checked_at`, so the model *cannot* answer

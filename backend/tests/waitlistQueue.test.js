@@ -21,6 +21,7 @@ import {
   closeWaitlistWorker,
 } from '../src/queue/waitlistWorker.js';
 import * as appointmentService from '../src/appointments/services/appointmentService.js';
+import { convertTo12Hour } from '../src/appointments/services/appointmentService.js';
 import * as doctorAppointmentService from '../src/doctors/services/doctorAppointmentService.js';
 import { APPOINTMENT_STATUS } from '../src/constants/appointmentStatus.js';
 
@@ -335,9 +336,14 @@ test('the job payload carries identifiers and nothing else', { skip }, async () 
   // Asserted as an exact SET, so adding a patient name or an email to the
   // payload later fails here rather than quietly parking PII in a third
   // party's Redis.
+  //
+  // 7.2 added `time` and this list was updated DELIBERATELY, which is the only
+  // way it should ever change. A freed slot's clock time identifies nobody —
+  // the appointment that held it is already cancelled — so it is the same
+  // class of value as the date that was always here.
   assert.deepEqual(
     Object.keys(job.data).sort(),
-    ['date', 'doctorId', 'excludeUserId'],
+    ['date', 'doctorId', 'excludeUserId', 'time'],
   );
 
   assert.equal(job.data.doctorId, doctorId);
@@ -345,6 +351,9 @@ test('the job payload carries identifiers and nothing else', { skip }, async () 
   // A plain date string, not an ISO timestamp that survived JSON round-tripping.
   assert.match(job.data.date, /^\d{4}-\d{2}-\d{2}$/);
   assert.equal(job.data.date, SLOT_DATE);
+  // Already in the booking grid's format when it enters Redis, so the worker
+  // and the inline path see the same shape.
+  assert.match(job.data.time, /^\d{2}:\d{2} (AM|PM)$/);
 
   const serialised = JSON.stringify(job.data);
   for (const banned of ['Queue waiter', 'Queue booker', '@example.invalid', 'name']) {
@@ -627,4 +636,26 @@ test('a waitlist for another doctor is not queued into a notification', { skip }
   await runWorkerOnce();
 
   assert.equal((await notificationsFor(waiter)).length, 0);
+});
+
+// 7.2. The queued path is the one that can lose the time: it crosses a JSON
+// round-trip and a process boundary the inline path does not. Enqueue-only and
+// worker-only assertions would both miss a break in the handover between them.
+test('the freed time survives the queue and reaches the notification', { skip }, async () => {
+  await addWaitlist(waiter);
+  const appointmentId = await book(booker);
+
+  const [[booked]] = await db.query(
+    'SELECT appointment_time FROM appointments WHERE id = ?',
+    [appointmentId],
+  );
+
+  await appointmentService.cancelAppointment(appointmentId, booker, null);
+  await runWorkerOnce();
+
+  const [{ payload }] = await notificationsFor(waiter);
+
+  assert.equal(payload.slot_time, convertTo12Hour(booked.appointment_time));
+  // And not double-formatted on the way through.
+  assert.match(payload.slot_time, /^\d{2}:\d{2} (AM|PM)$/);
 });

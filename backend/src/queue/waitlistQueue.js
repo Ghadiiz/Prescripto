@@ -55,14 +55,17 @@ export const getWaitlistQueue = () => {
 export const enqueueWaitlistNotification = async ({
   doctorId,
   date,
+  time = null,
   excludeUserId = null,
 }) => {
   const target = getWaitlistQueue();
 
   if (!target) return null;
 
-  // The payload is three identifiers and a date string. NO patient names, no
-  // recipient list, no email.
+  // The payload is three identifiers, a date and a clock time. NO patient
+  // names, no recipient list, no email. A freed slot's time says nothing about
+  // who held it — the appointment is already cancelled — so this does not
+  // change what rests in Redis in any way that matters.
   //
   // The worker calls the same notifyWaitlistForFreedSlot the inline path does,
   // which resolves the recipients and sanitises the doctor's name at write
@@ -71,7 +74,7 @@ export const enqueueWaitlistNotification = async ({
   // usual here, because Redis is a third party in production.
   return target.add(
     NOTIFY_JOB,
-    { doctorId, date, excludeUserId },
+    { doctorId, date, time, excludeUserId },
     // Deliberately no deterministic jobId. Keying on doctor+date would look
     // like helpful deduplication and would in fact DROP a second, legitimate
     // cancellation's notification whenever the first job was still within its

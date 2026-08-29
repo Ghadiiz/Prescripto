@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 
 import { connectDB, getDB } from '../src/config/mysql.js';
 import * as appointmentService from '../src/appointments/services/appointmentService.js';
+import { convertTo12Hour } from '../src/appointments/services/appointmentService.js';
 import * as doctorAppointmentService from '../src/doctors/services/doctorAppointmentService.js';
 import { notifyWaitlistForFreedSlot } from '../src/notifications/services/waitlistNotifier.js';
 import { APPOINTMENT_STATUS } from '../src/constants/appointmentStatus.js';
@@ -311,6 +312,91 @@ test('the payload carries what the bell renders, sanitised', async () => {
   // sanitizeAdminText strips control and format characters from admin-editable
   // text before it reaches a patient's screen.
   assert.ok(!/[\p{Cc}\p{Cf}]/u.test(payload.doctor_name));
+});
+
+// --- 7.2: the freed TIME ------------------------------------------------------
+
+test('the payload names the freed time in the booking grid format', async () => {
+  await addWaitlist(waiter);
+  const appointmentId = await bookAppointment(booker);
+
+  const [[booked]] = await db.query(
+    'SELECT appointment_time FROM appointments WHERE id = ?',
+    [appointmentId],
+  );
+
+  await appointmentService.cancelAppointment(appointmentId, booker, null);
+
+  const [{ payload }] = await notificationsFor(waiter);
+
+  // The SAME string the booking page shows, because both come from
+  // appointmentService.convertTo12Hour. A separate formatter here would be a
+  // second source of truth that could drift.
+  assert.equal(payload.slot_time, convertTo12Hour(booked.appointment_time));
+  assert.match(payload.slot_time, /^\d{2}:\d{2} (AM|PM)$/);
+});
+
+test('the DOCTOR cancel path names the time too', async () => {
+  await addWaitlist(waiter);
+  const appointmentId = await bookAppointment(booker);
+
+  const [[booked]] = await db.query(
+    'SELECT appointment_time FROM appointments WHERE id = ?',
+    [appointmentId],
+  );
+
+  await doctorAppointmentService.cancelAppointment(appointmentId, doctorId);
+
+  const [{ payload }] = await notificationsFor(waiter);
+
+  assert.equal(payload.slot_time, convertTo12Hour(booked.appointment_time));
+});
+
+test('a notification with no time is still written', async () => {
+  // The deploy straddle: a job enqueued before 7.2 reaches the new worker with
+  // no `time`, and the notifier is called directly by that worker.
+  await addWaitlist(waiter);
+
+  await notifyWaitlistForFreedSlot({ doctorId, date: SLOT_DATE });
+
+  const [{ payload }] = await notificationsFor(waiter);
+
+  assert.equal(payload.date, SLOT_DATE);
+  assert.ok(
+    !('slot_time' in payload),
+    'the key is omitted rather than set to null, so old and new read alike',
+  );
+});
+
+test('an already-formatted time is not formatted twice', async () => {
+  // The queued path normalises when building the job payload and the worker
+  // hands the result back in. Converting '10:30 AM' again would yield
+  // '10:30 AM AM'.
+  await addWaitlist(waiter);
+
+  await notifyWaitlistForFreedSlot({
+    doctorId,
+    date: SLOT_DATE,
+    time: '10:30 AM',
+  });
+
+  const [{ payload }] = await notificationsFor(waiter);
+
+  assert.equal(payload.slot_time, '10:30 AM');
+});
+
+test('a time that is not a time is dropped rather than rendered', async () => {
+  await addWaitlist(waiter);
+
+  await notifyWaitlistForFreedSlot({
+    doctorId,
+    date: SLOT_DATE,
+    time: 'whenever',
+  });
+
+  const [{ payload }] = await notificationsFor(waiter);
+
+  assert.ok(!('slot_time' in payload));
 });
 
 test('the waitlist match uses idx_match rather than scanning', async () => {

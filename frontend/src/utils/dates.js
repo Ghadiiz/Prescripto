@@ -26,3 +26,14 @@ export const toLocalDateString = (date) => {
 // into an address bar.
 export const isCalendarDate = (value) =>
   typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value);
+
+// A booking-grid slot label, exactly as the backend's `convertTo12Hour`
+// writes it: a zero-padded 12-hour clock, '10:30 AM' / '02:00 PM'.
+//
+// This VALIDATES the shape; it never produces one. 7.2 deliberately keeps the
+// only formatter on the backend, so the string in a notification and the
+// strings on the booking page come from the same line of code and cannot
+// drift. Re-implementing the conversion here is what this comment exists to
+// stop.
+export const isSlotTime = (value) =>
+  typeof value === 'string' && /^\d{2}:\d{2} (AM|PM)$/.test(value);

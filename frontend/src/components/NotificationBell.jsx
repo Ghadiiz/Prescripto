@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 
 import { AppContext } from '../context/AppContext';
 import { useNotifications } from '../hooks/useNotifications';
-import { isCalendarDate } from '../utils/dates';
+import { isCalendarDate, isSlotTime } from '../utils/dates';
 
 // The bell, its badge, and the dropdown.
 //
@@ -55,6 +55,17 @@ const describe = (notification) => {
         })
       : 'a date you asked about';
 
+    // 7.2. Phrased as something that HAPPENED, not as something that is still
+    // true: by the time this is read the slot may be gone, and the booking
+    // page is the only thing that knows. Rule 7 in the patient's own words.
+    //
+    // Note what it does not claim: only ONE unread notice exists per doctor
+    // per day, so this names the first slot that opened, not every one.
+    if (isSlotTime(payload?.slot_time)) {
+      return `A ${payload.slot_time} slot opened with ${doctor} on ${date}.`;
+    }
+
+    // Notices written before 7.2 carry no time.
     return `${doctor} has a slot free on ${date}.`;
   }
 
@@ -79,10 +90,18 @@ const targetFor = (notification) => {
 
   const path = `/appointment/${encodeURIComponent(doctorId)}`;
   const date = notification.payload?.date;
+  const slotTime = notification.payload?.slot_time;
 
-  return isCalendarDate(date)
-    ? `${path}?date=${encodeURIComponent(date)}`
-    : path;
+  if (!isCalendarDate(date)) return path;
+
+  const params = new URLSearchParams({ date });
+
+  // 7.2. The time rides along only when it is well formed; the page then
+  // preselects that slot IF the server still lists it. A slot taken in the
+  // meantime simply is not there, which is the honest outcome.
+  if (isSlotTime(slotTime)) params.set('time', slotTime);
+
+  return `${path}?${params.toString()}`;
 };
 
 const NotificationBell = () => {

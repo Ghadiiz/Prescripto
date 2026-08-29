@@ -8,6 +8,7 @@ import { sanitizeAdminText } from '../../assistant/guardrails/sanitize.js';
 import { NOTIFICATION_TYPE } from '../../constants/notificationTypes.js';
 import { isBeforeToday } from '../../assistant/tools/dates.js';
 import { enqueueWaitlistNotification } from '../../queue/waitlistQueue.js';
+import { convertTo12Hour } from '../../appointments/services/appointmentService.js';
 
 // Turns a freed slot into notifications.
 //
@@ -25,12 +26,38 @@ const toDateString = (value) => {
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
 };
 
+// The freed time as the booking grid writes it — '10:30 AM'. Deliberately the
+// SAME function `getAvailableSlots` uses, so the string in a notification and
+// the strings on the booking page cannot disagree; 7.2's click-through matches
+// one against the other.
+//
+// Returns null rather than throwing when there is no time. That is not
+// defensive padding: notifications written before 7.2 have none, and a job
+// enqueued by the previous deploy can reach this worker without one.
+// IDEMPOTENT, and it has to be. The queued path normalises once when building
+// the job payload and the worker hands the result back through here, so a
+// value that is already a label must pass straight through — converting
+// '10:30 AM' again yields '10:30 AM AM'. That also covers the deploy straddle,
+// where an old job carries a raw '10:30:00' and a new one carries a label.
+const SLOT_LABEL = /^\d{2}:\d{2} (AM|PM)$/;
+
+const toSlotTime = (value) => {
+  if (!value) return null;
+
+  const raw = String(value).trim();
+  if (SLOT_LABEL.test(raw)) return raw;
+
+  return /^\d{1,2}:\d{2}/.test(raw) ? convertTo12Hour(raw) : null;
+};
+
 export const notifyWaitlistForFreedSlot = async ({
   doctorId,
   date,
+  time = null,
   excludeUserId = null,
 }) => {
   const freedDate = toDateString(date);
+  const freedTime = toSlotTime(time);
 
   // Cancelling last week's appointment frees nothing anyone can book.
   if (isBeforeToday(freedDate)) return { notified: 0, reason: 'date_in_past' };
@@ -69,6 +96,9 @@ export const notifyWaitlistForFreedSlot = async ({
     // through the same sanitiser every tool result does.
     doctor_name: sanitizeAdminText({ name: doctor?.name ?? 'A doctor' }).name,
     date: freedDate,
+    // 7.2. Omitted rather than null when unknown, so an old-shaped payload and
+    // a new one with no time read the same to the bell.
+    ...(freedTime ? { slot_time: freedTime } : {}),
   };
 
   for (const userId of recipients) {
@@ -106,6 +136,10 @@ export const notifyWaitlistSafely = async (args) => {
   const payload = {
     doctorId: args?.doctorId,
     date: toDateString(args?.date),
+    // Normalised here for the same reason the date is: a raw TIME value from
+    // MySQL would not survive JSON round-tripping identically, so the queued
+    // path would see a different shape from the inline one.
+    time: toSlotTime(args?.time),
     excludeUserId: args?.excludeUserId ?? null,
   };
 

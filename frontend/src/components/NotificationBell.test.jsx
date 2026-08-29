@@ -86,6 +86,61 @@ beforeEach(() => {
   mockNotifications = [];
 });
 
+describe('NotificationBell wording', () => {
+  it('names the freed time when the payload has one', async () => {
+    mockNotifications = [
+      slotNotice({
+        payload: {
+          doctor_id: 393,
+          doctor_name: 'Dr. Placeholder Example',
+          date: '2026-09-04',
+          slot_time: '10:30 AM',
+        },
+      }),
+    ];
+    await openBell();
+
+    // Phrased as something that HAPPENED. It must not claim the slot is still
+    // free — by the time this is read it may not be (rule 7).
+    expect(
+      screen.getByText(/A 10:30 AM slot opened with Dr\. Placeholder Example/i),
+    ).toBeInTheDocument();
+  });
+
+  it('falls back to the date-only sentence for a pre-7.2 notice', async () => {
+    mockNotifications = [
+      slotNotice({
+        payload: {
+          doctor_id: 393,
+          doctor_name: 'Dr. Placeholder Example',
+          date: '2026-09-04',
+        },
+      }),
+    ];
+    await openBell();
+
+    expect(screen.getByText(/has a slot free on/i)).toBeInTheDocument();
+    expect(screen.queryByText(/slot opened with/i)).not.toBeInTheDocument();
+  });
+
+  it('ignores a slot_time that is not a slot label', async () => {
+    mockNotifications = [
+      slotNotice({
+        payload: {
+          doctor_id: 393,
+          doctor_name: 'Dr. Placeholder Example',
+          date: '2026-09-04',
+          slot_time: '<script>alert(1)</script>',
+        },
+      }),
+    ];
+    await openBell();
+
+    expect(screen.getByText(/has a slot free on/i)).toBeInTheDocument();
+    expect(screen.queryByText(/script/i)).not.toBeInTheDocument();
+  });
+});
+
 describe('NotificationBell click-through', () => {
   it('navigates to the doctor with the freed date attached', async () => {
     mockNotifications = [slotNotice()];
@@ -156,6 +211,40 @@ describe('NotificationBell click-through', () => {
 
     expect(screen.getByTestId('url')).toHaveTextContent('/');
     expect(screen.getByText('home')).toBeInTheDocument();
+  });
+
+  it('carries the freed time into the URL when the payload names one', async () => {
+    mockNotifications = [
+      slotNotice({
+        payload: { doctor_id: 393, date: '2026-09-04', slot_time: '10:30 AM' },
+      }),
+    ];
+    const user = await openBell();
+
+    await user.click(screen.getByText(/slot opened with/i));
+
+    const url = screen.getByTestId('url').textContent;
+    expect(url).toContain('/appointment/393');
+    // URLSearchParams encodes the space as '+', which decodes back to a space.
+    expect(decodeURIComponent(url.replace(/\+/g, ' '))).toContain(
+      'time=10:30 AM',
+    );
+  });
+
+  it('drops a malformed time instead of putting it in the URL', async () => {
+    mockNotifications = [
+      slotNotice({
+        payload: { doctor_id: 393, date: '2026-09-04', slot_time: 'whenever' },
+      }),
+    ];
+    const user = await openBell();
+
+    await user.click(screen.getByText(/has a slot free on/i));
+
+    const url = screen.getByTestId('url').textContent;
+    expect(url).toContain('date=2026-09-04');
+    expect(url).not.toContain('time=');
+    expect(url).not.toContain('whenever');
   });
 
   it('closes the dropdown on navigating', async () => {

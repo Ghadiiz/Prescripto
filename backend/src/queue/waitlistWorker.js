@@ -40,9 +40,12 @@ export const createWaitlistWorker = () => {
   const worker = new Worker(
     WAITLIST_QUEUE_NAME,
     async (job) => {
-      const { doctorId, date, excludeUserId } = job.data;
+      // `time` is absent on any job enqueued before 7.2. Destructuring gives
+      // undefined, and the notifier falls back to the date-only notice rather
+      // than failing a job that was valid when it was created.
+      const { doctorId, date, time, excludeUserId } = job.data;
 
-      return notifyWaitlistForFreedSlot({ doctorId, date, excludeUserId });
+      return notifyWaitlistForFreedSlot({ doctorId, date, time, excludeUserId });
     },
     {
       connection,

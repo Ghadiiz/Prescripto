@@ -119,6 +119,8 @@ export const cancelAppointment = async (appointmentId, doctorId) => {
   await notifyWaitlistSafely({
     doctorId: appointment.doctor_id,
     date: appointment.appointment_date,
+    // 7.2: which half-hour opened, not just which day.
+    time: appointment.appointment_time,
   });
 
   return true;

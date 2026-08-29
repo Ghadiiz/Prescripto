@@ -146,6 +146,7 @@ const definition = {
               doctor_id: 12,
               doctor_name: 'Dr. Placeholder Example',
               date: '2031-03-04',
+              slot_time: '10:30 AM',
             },
           },
           read_at: { type: 'string', format: 'date-time', nullable: true, example: null },
