@@ -1,7 +1,9 @@
 import React, { useContext, useEffect, useRef, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 
 import { AppContext } from '../context/AppContext';
 import { useNotifications } from '../hooks/useNotifications';
+import { isCalendarDate } from '../utils/dates';
 
 // The bell, its badge, and the dropdown.
 //
@@ -59,8 +61,33 @@ const describe = (notification) => {
   return payload?.message ?? 'You have a new notification.';
 };
 
+// Where a notification takes you, or null when it takes you nowhere.
+//
+// The payload is written by the server, but it is still DATA: it reaches here
+// through a JSON column, and this is the boundary where it becomes a URL. So
+// the doctor id is encoded and the date has to look like a calendar date —
+// a malformed one drops the parameter rather than travelling into the address
+// bar. Only `waitlist_slot_open` has a destination; anything else stays a
+// plain message that marks itself read.
+const targetFor = (notification) => {
+  if (notification.type !== 'waitlist_slot_open') return null;
+
+  const doctorId = notification.payload?.doctor_id;
+  if (doctorId === undefined || doctorId === null || doctorId === '') {
+    return null;
+  }
+
+  const path = `/appointment/${encodeURIComponent(doctorId)}`;
+  const date = notification.payload?.date;
+
+  return isCalendarDate(date)
+    ? `${path}?date=${encodeURIComponent(date)}`
+    : path;
+};
+
 const NotificationBell = () => {
   const { token } = useContext(AppContext);
+  const navigate = useNavigate();
   const { unreadCount, notifications, isLoading, loadList, markRead, markAllRead } =
     useNotifications();
 
@@ -148,7 +175,18 @@ const NotificationBell = () => {
               <button
                 key={notification.id}
                 type="button"
-                onClick={() => !notification.read_at && markRead(notification.id)}
+                onClick={() => {
+                  if (!notification.read_at) markRead(notification.id);
+
+                  // Marking read is fire-and-forget in the hook, so navigating
+                  // straight away does not race it — the optimistic update has
+                  // already happened locally.
+                  const target = targetFor(notification);
+                  if (target) {
+                    setIsOpen(false);
+                    navigate(target);
+                  }
+                }}
                 className={`block w-full border-b border-gray-50 px-3 py-2.5 text-left last:border-b-0 hover:bg-gray-50 ${
                   notification.read_at ? 'opacity-60' : ''
                 }`}

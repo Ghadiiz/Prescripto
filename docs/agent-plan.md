@@ -1581,7 +1581,7 @@ goes last. **7.5 sits after all of them for a different reason** — it consumes
 > some other doctor's appointment would be a nonsensical and alarming bug. The
 > query binds `doctor_id` first and cannot widen across doctors.
 
-- [ ] **7.1** **Actionable notification click-through.** Clicking a notification
+- [x] **7.1** **Actionable notification click-through.** Clicking a notification
       navigates to the doctor's booking page with the date pre-filled, instead
       of leaving the patient to find the doctor themselves.
       - Cheapest, highest-value, lowest-risk of the four — and mostly
@@ -1595,6 +1595,74 @@ goes last. **7.5 sits after all of them for a different reason** — it consumes
         date handling, and a notification is a *stronger* invitation to book
         than the assistant card 3.4 already softened, so the two are worth
         deciding together rather than twice.
+
+      *Delivered as three things, because exploring the first one surfaced the
+      other two.* No backend change at all: the 5.4 payload already carries
+      `doctor_id`, `doctor_name` and `date`, and `GET /api/doctors/:id` already
+      returns `available`.
+
+      - **The click-through.** The bell navigates to
+        `/appointment/:docId?date=YYYY-MM-DD`. A query parameter rather than
+        router state, so it survives a reload — `useSearchParams` was already
+        the pattern in `VerifyEmail.jsx`. Only `waitlist_slot_open` has a
+        destination; other types stay plain messages that mark themselves read.
+      - **The payload is treated as DATA at the URL boundary.** It is written
+        by our own server, but it arrives through a JSON column, so
+        `doctor_id` is encoded and `date` must match `^\d{4}-\d{2}-\d{2}$`.
+        A malformed date drops the parameter instead of travelling into the
+        address bar.
+      - **A date beyond the 7-day strip is a REAL case, not a defensive one.**
+        `join_waitlist` accepts a window starting any day from today and
+        spanning up to `MAX_WINDOW_DAYS = 30`, with no upper bound on the
+        start. The page keeps its default day and says the slot is further
+        ahead than it can book, rather than silently showing a different day.
+
+      **A pre-existing bug, found and fixed here because 7.1 depends on it.**
+      `generateAvailableDates` built its date strings with
+      `toISOString().split('T')[0]`, which is UTC. Reproduced in `Asia/Amman`
+      (UTC+3): at 01:30 local on Aug 30 the strip generated **Aug 29**, 30, 31
+      — the first chip was YESTERDAY, and `bookAppointment` posted that string
+      as `slotDate`. So for about three hours a night the booking page offered
+      a past date. It also broke 7.1 directly, since a notification's `date` is
+      a local calendar day written by the server. Fixed with a
+      `toLocalDateString` in a new `frontend/src/utils/dates.js`, mirroring the
+      backend's own `assistant/tools/dates.js`.
+
+      **The 3.4 deferred item, decided here as this entry asked.**
+      `Appointment.jsx` never read `docInfo.available`, so it rendered a full
+      picker for a doctor who had stopped accepting — and a notification is a
+      stronger invitation than the assistant card 3.4 softened. The booking
+      block is now replaced by a notice, with `RelatedDoctors` still below so
+      the page is not a dead end. This closes an asymmetry:
+      `join_waitlist` has always refused these doctors with
+      `doctor_not_accepting`; only the page had not.
+
+      - `availableDates` became a **`useMemo`** rather than state an effect
+        overwrote — the shape 6.9 established, and it avoids a trap: growing
+        the existing effect risked `set-state-in-effect` starting to fire and
+        breaking the `0/0/0/0` ratchet.
+      - `aria-current="date"` was added to the selected chip. The highlight was
+        a Tailwind class and nothing else, so it had no name for a screen
+        reader and no handle for a test.
+
+      **Verification — the first UI increment with a real suite to write into
+      rather than browser checks by hand.** 16 new tests (52 total across the
+      frontend), and **9 mutations, all caught**: reinstating `toISOString`,
+      ignoring the parameter, dropping the out-of-window notice, dropping the
+      availability guard, skipping date validation, omitting the date, dropping
+      the doctor-id guard, and renaming the query parameter on either side.
+      Verified in a browser against the real API too: preselection, the
+      out-of-window notice, a `javascript:` date being ignored, and the
+      not-accepting notice (a doctor was flipped and restored).
+
+      *Two corrections during the work, both worth recording:* a test asserted
+      that an unavailable doctor's page skips the slots request — it does not,
+      because the doctor and the slots are fetched in parallel, and serialising
+      them to save a request in the rare case would be the wrong trade. And an
+      integration-test comment claimed a parameter rename would leave both unit
+      suites green; mutation testing disproved it, and the comment now says
+      what the test actually adds — that the two components compose, with no
+      hand-written URL standing between them.
 
 - [ ] **7.2** **The freed time, not just the freed date.** The notification says
       only which DATE opened up. The cancelled appointment has a specific
@@ -1648,6 +1716,31 @@ goes last. **7.5 sits after all of them for a different reason** — it consumes
       - Interacts with 7.2's dedupe decision and with 7.3's per-slot data: all
         three are the same move to half-hour granularity, seen from the
         notification, the query and the schema.
+      - **DEFERRED HERE FROM 7.1 — reconcile the two windows.** The booking
+        page offers a fixed **7 days**; `join_waitlist` accepts a window
+        starting any day from today and spanning up to **30**
+        (`MAX_WINDOW_DAYS`). So a patient can be waitlisted for, and then
+        notified about, a date the booking page cannot show them. **7.1 only
+        stopgaps this** with an honest notice — "further ahead than the 7 days
+        this page can book" — which is truthful but is not a resolution: the
+        patient is told about a slot and then told to come back later.
+
+        The two candidate fixes pull in opposite directions and the choice
+        belongs with the schema change:
+
+        1. **Cap the waitlist to the booking window.** Smallest and most
+           honest — never promise what the app cannot deliver. Costs the
+           feature its reach: a patient who wants a slot three weeks out can no
+           longer ask.
+        2. **Extend the booking strip to the waitlist's reach.** Keeps the
+           feature, but a 30-day strip is a different component than the
+           7-chip row that exists, and every extra day is another
+           `available-slots` request.
+
+        Whichever is chosen, **`BOOKABLE_DAYS` in `Appointment.jsx` and
+        `MAX_WINDOW_DAYS` in `joinWaitlist.js` must stop being two independent
+        numbers that happen to disagree.** That they disagree at all is the
+        bug; 7.1 named it rather than fixed it.
 
 - [ ] **7.5** **Waitlist aware of existing appointments** — the capstone.
       **Depends on 7.3 and 7.4; comes after both.**

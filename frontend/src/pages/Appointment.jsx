@@ -1,25 +1,65 @@
-import React, { useContext, useEffect, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import React, { useContext, useEffect, useMemo, useState } from 'react';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { AppContext } from '../context/AppContext';
 import { assets } from '../assets/assets';
 import RelatedDoctors from '../components/RelatedDoctors';
+import { isCalendarDate, toLocalDateString } from '../utils/dates';
 import axios from 'axios';
 import { toast } from 'react-toastify';
 
+// How many days ahead the strip offers. A notification can name a date beyond
+// this — a waitlist window may start any day from today and span up to 30 —
+// so the out-of-window case below is reachable, not defensive.
+const BOOKABLE_DAYS = 7;
+
 const Appointment = () => {
   const { docId } = useParams();
+  const [searchParams] = useSearchParams();
   const { currencySymbol, backendUrl, token } = useContext(AppContext);
   const navigate = useNavigate();
 
   const daysOfWeek = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
 
+  // Where a notification click lands: /appointment/:docId?date=YYYY-MM-DD.
+  // Anything that is not a calendar date is ignored rather than trusted.
+  const requestedDate = searchParams.get('date');
+  const wantedDate = isCalendarDate(requestedDate) ? requestedDate : null;
+
   const [docInfo, setDocInfo] = useState(null);
-  const [availableDates, setAvailableDates] = useState([]);
   const [availableTimes, setAvailableTimes] = useState([]);
-  const [selectedDate, setSelectedDate] = useState('');
   const [selectedTime, setSelectedTime] = useState('');
   const [loading, setLoading] = useState(true);
   const [paymentMethod, setPaymentMethod] = useState('cash');
+
+  // Derived from today, not stored: an effect that immediately overwrote a
+  // useState was the shape 6.9 removed everywhere else.
+  const availableDates = useMemo(() => {
+    const dates = [];
+    const today = new Date();
+
+    for (let i = 0; i < BOOKABLE_DAYS; i++) {
+      const date = new Date(today);
+      date.setDate(today.getDate() + i);
+      dates.push({ dateObj: date, dateString: toLocalDateString(date) });
+    }
+
+    return dates;
+  }, []);
+
+  const wantedDateIsBookable = availableDates.some(
+    (item) => item.dateString === wantedDate,
+  );
+
+  // The requested date when the strip can show it, otherwise the first day —
+  // which is what the page has always opened on.
+  const [selectedDate, setSelectedDate] = useState(() =>
+    wantedDateIsBookable ? wantedDate : (availableDates[0]?.dateString ?? ''),
+  );
+
+  // A notification told the patient about a date this page cannot offer. Say
+  // so, rather than silently showing them a different day and letting them
+  // wonder where their slot went.
+  const showOutOfWindowNotice = Boolean(wantedDate) && !wantedDateIsBookable;
 
   const fetchDocInfo = async () => {
     try {
@@ -34,25 +74,6 @@ const Appointment = () => {
       toast.error('Failed to load doctor information');
     } finally {
       setLoading(false);
-    }
-  };
-
-  const generateAvailableDates = () => {
-    const dates = [];
-    const today = new Date();
-
-    for (let i = 0; i < 7; i++) {
-      const date = new Date(today);
-      date.setDate(today.getDate() + i);
-      dates.push({
-        dateObj: date,
-        dateString: date.toISOString().split('T')[0],
-      });
-    }
-
-    setAvailableDates(dates);
-    if (dates.length > 0) {
-      setSelectedDate(dates[0].dateString);
     }
   };
 
@@ -118,7 +139,6 @@ const Appointment = () => {
 
   useEffect(() => {
     fetchDocInfo();
-    generateAvailableDates();
   }, [docId]);
 
   useEffect(() => {
@@ -187,8 +207,42 @@ const Appointment = () => {
         </div>
       </div>
 
+      {!docInfo.available ? (
+        // The 3.4 deferred item, decided with 7.1: the page used to render a
+        // full picker for a doctor who had stopped accepting, and a
+        // notification click-through is a stronger invitation to book than the
+        // assistant card 3.4 already softened. `join_waitlist` has always
+        // refused these doctors; only the page had not.
+        <div className="sm:ml-72 sm:pl-4 mt-8">
+          <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3">
+            <p className="text-sm font-medium text-amber-900">
+              {docInfo.name} is not accepting appointments at the moment.
+            </p>
+            <p className="mt-1 text-sm text-amber-800">
+              There is nothing to book here for now. Other doctors in the same
+              speciality are listed below.
+            </p>
+          </div>
+        </div>
+      ) : (
       <div className="sm:ml-72 sm:pl-4 mt-8 font-medium text-[#565656]">
         <p>Booking slots</p>
+
+        {showOutOfWindowNotice && (
+          <div className="mt-3 rounded-lg border border-blue-200 bg-blue-50 px-4 py-3">
+            <p className="text-sm text-blue-900">
+              The slot you were told about is on{' '}
+              <span className="font-medium">
+                {new Date(`${wantedDate}T00:00:00`).toLocaleDateString(
+                  undefined,
+                  { weekday: 'short', day: 'numeric', month: 'short' },
+                )}
+              </span>
+              , which is further ahead than the {BOOKABLE_DAYS} days this page
+              can book. Come back nearer the date.
+            </p>
+          </div>
+        )}
 
         <div className="flex gap-3 items-center w-full overflow-x-scroll mt-4">
           {availableDates.map((item, index) => (
@@ -198,6 +252,10 @@ const Appointment = () => {
                 setSelectedTime('');
               }}
               key={index}
+              // The highlight is the only thing that says which day is
+              // selected. Naming it makes that legible to a screen reader, and
+              // assertable without reaching for a Tailwind class.
+              aria-current={selectedDate === item.dateString ? 'date' : undefined}
               className={`text-center py-6 min-w-16 rounded-full cursor-pointer ${
                 selectedDate === item.dateString
                   ? 'bg-primary text-white'
@@ -323,6 +381,7 @@ const Appointment = () => {
           Book an appointment
         </button>
       </div>
+      )}
 
       <RelatedDoctors speciality={docInfo.speciality} docId={docId} />
     </div>
