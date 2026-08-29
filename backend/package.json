@@ -10,13 +10,15 @@
     "start": "node server.js",
     "server": "nodemon server.js",
     "migrate": "node database/migrate.js",
-    "seed": "node database/seed.js"
+    "seed": "node database/seed.js",
+    "worker": "node src/queue/waitlistWorker.js"
   },
   "author": "Ghadi Dababneh",
   "license": "UNLICENSED",
   "description": "Backend API for Prescripto, a doctor appointment booking system.",
   "dependencies": {
     "bcrypt": "^6.0.0",
+    "bullmq": "^6.3.2",
     "cloudinary": "^2.8.0",
     "cors": "^2.8.5",
     "dotenv": "^17.2.3",

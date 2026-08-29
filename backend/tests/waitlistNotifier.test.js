@@ -82,6 +82,21 @@ before(async () => {
     throw new Error(`Refusing to run tests: DB_HOST is "${dbHost}", not localhost.`);
   }
 
+  // This suite pins the INLINE notification path, and 6.2 gave the notifier a
+  // second one: with REDIS_URL set, a cancellation ENQUEUES and the row does
+  // not exist until a worker runs, so every assertion here about a
+  // notification arriving during the cancel would fail.
+  //
+  // Unsetting it makes that explicit rather than leaving the file quietly
+  // dependent on whether the developer happens to have Redis configured. This
+  // is 6.1's DISABLED state — the fallback 6.2 must preserve — and keeping a
+  // suite on it is the regression proof that the app still works with no
+  // Redis at all. The queued path has its own suite in waitlistQueue.test.js.
+  //
+  // Safe to mutate: each test file is its own process, and 6.1 reads
+  // REDIS_URL at call time rather than capturing it at import.
+  delete process.env.REDIS_URL;
+
   await connectDB();
   db = getDB();
 

@@ -1006,8 +1006,69 @@ Each of these maps to an explicit line on the target job description.
         mutation passed it. It now seeds a real count.
       - Verified **both ways**: 235/235 with `REDIS_URL` (12 Redis tests
         running, 0 skipped) and 223 pass / 12 skip without it.
-- [ ] **6.2** BullMQ: the waitlist matcher becomes a background job rather than
+- [x] **6.2** BullMQ: the waitlist matcher becomes a background job rather than
       blocking the cancel response.
+      - **Pays off 5.4's stated debt** — a failed notification was caught,
+        logged and LOST — without weakening the guarantee that justified it.
+        `notifyWaitlistSafely` keeps its name, signature and outer try/catch
+        (both cancel call sites unchanged) and becomes a ladder: **enqueue** →
+        on failure **notify inline** (5.4's behaviour) → on failure **log and
+        swallow**. A broken queue degrades to doing the work, never to silence.
+      - **Redis stays optional**, as 6.1 established: no `REDIS_URL` → inline,
+        byte-for-byte 5.4. The 5.4 suite now unsets `REDIS_URL` explicitly so it
+        pins the inline path rather than depending on whether the developer
+        happens to have Redis running.
+      - The fail direction is the **opposite of `confirmations.js`**, on
+        purpose: that one guards a write a patient authorised, so uncertainty
+        must mean no; here the alternative to falling back is losing a
+        notification, which is the thing this increment exists to prevent.
+      - **The job payload is three identifiers and a date string** — no names,
+        no email ever rests in Redis, which matters because Upstash is a third
+        party. The worker calls 5.4's unchanged `notifyWaitlistForFreedSlot`,
+        so matching and rule-5 sanitisation stay in one place on the write
+        path. Idempotency is **inherited** from 5.4's unread dedupe rather than
+        re-implemented, and there is deliberately **no deterministic `jobId`**:
+        queue-level dedupe would silently drop a second legitimate
+        cancellation's notification.
+
+      **Deployment shape on the free tier, stated plainly:**
+
+      - The worker runs **in the web process**. Render's Background Workers are
+        a paid service type; the free tier offers web services only.
+      - A free web service **spins down when idle and works no queue** until a
+        request wakes it. Jobs wait in Redis meanwhile — a delayed badge, not a
+        lost notification, and still strictly better than 5.4, where a failed
+        notification was gone for good.
+      - `npm run worker` exists as a standalone entry point, so moving to a real
+        background worker later is a start-command change, not a rewrite.
+
+      **Two separate costs, two separate fixes — not the same problem:**
+
+      - **Log volume.** BullMQ requires `maxRetriesPerRequest: null`, so an
+        unreachable Redis retries forever and emitted an error line per
+        attempt: **measured at 36 lines in 30 seconds** against a dead port,
+        roughly 100,000 a day. The two infinite-retry streams now log
+        **on transition** (loud, and announcing that it is throttling), then at
+        most **one line per 60s carrying the suppressed count**, then **loudly
+        on recovery**; a healthy boot says nothing. Retry behaviour is
+        untouched — only `console.error` is rate-limited. 36 lines → 2.
+      - **Idle command spend.** Separately, and for a different reason: a
+        BullMQ worker blocks on the queue and re-issues that read on a
+        `drainDelay` cycle, which DOES consume Upstash commands while nothing
+        is happening. `drainDelay` is set to 60s to cut that.
+      - *Worth keeping straight:* a failed TCP connect issues no Redis command,
+        so an unreachable Upstash costs nothing in commands. The throttle fixes
+        logs; the drainDelay fixes spend. 6.1's own client needs neither — its
+        `retryStrategy` gives up after 3 attempts, so it cannot flood.
+      - *Shutdown is proven, not cited:* a graceful `close()` waits for the
+        in-flight job (asserted through the real `closeWaitlistWorker`, so a
+        force-close regression fails), and a job abandoned by a SIGKILL is
+        recovered by the next worker through BullMQ's stalled-job mechanism.
+      - *Three hollow tests of my own, found and fixed:* the worker helper
+        reimplemented the worker (so the real worker was exercised by nothing),
+        the retry-limit test asserted against the same constant its mutation
+        changed, and one mutation produced non-parsing code — a compile error
+        is not a caught mutation.
 - [ ] **6.3** `swagger-jsdoc` + `swagger-ui-express`. Document **the whole API**,
       not just the assistant. Served at `/api/docs`.
 - [ ] **6.4** GitHub Actions: lint, test, docker build on every push.
