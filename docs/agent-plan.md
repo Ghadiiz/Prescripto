@@ -1123,7 +1123,50 @@ Each of these maps to an explicit line on the target job description.
         backslashes and glob reads those as escapes, so the recursive pattern
         matched nothing and the spec built with **one** path instead of 47 —
         silently, because a glob matching no files is not an error.
-- [ ] **6.4** GitHub Actions: lint, test, docker build on every push.
+- [x] **6.4** GitHub Actions: lint, test, docker build on every push.
+      - Three parallel jobs on every push and pull request: **test** (backend
+        suite against real MySQL and Redis service containers, then both MCP
+        smoke checks), **lint** (a ratchet, see below), **build**
+        (`docker compose build`, all three images).
+      - **Database setup order matters and is not optional:**
+        `schema.sql` → `npm run migrate` → `npm run seed`. `migrate.js`
+        deliberately does not apply the baseline — in Docker that happens from
+        `docker-entrypoint-initdb.d`, which a service container does not do.
+        Dropping the schema step fails the first migration on a missing table.
+      - **`DB_HOST=127.0.0.1` is load-bearing, not incidental.** Every suite
+        refuses to run unless DB_HOST is localhost. That guard is what stops a
+        CI run ever being pointed at Aiven, and the workflow satisfies it
+        honestly rather than working around it.
+      - **No secrets.** `JWT_SECRET` is a throwaway value defined in the job.
+        The suites set their own fake `GEMINI_API_KEY` and stub `fetch`, and
+        the eval that runs in CI is the mocked half by construction — so no
+        provider quota is spent and there is no API key to leak.
+      - **The lint step is a RATCHET, not `eslint .`.** Both frontends carry
+        pre-existing errors whose fixes change React effect behaviour in apps
+        with no test suite. `scripts/lint-ratchet.mjs` fails when the count
+        rises above `lint-baseline.json` — and also when it FALLS, because a
+        ceiling nobody lowers drifts from reality until it admits a new error
+        under the slack of an old one.
+        - Three `no-unused-vars` were fixed here as zero-risk: **frontend 8→7,
+          admin 6→4**. The four `only-export-components` errors were left in
+          the baseline after measuring that relocating those context exports
+          would change import paths in **35 consumer files**.
+      - **The rehearsal found two real bugs before CI ever ran**, which is the
+        argument for the increment:
+        - *Hardcoded database ids in the eval cases.* Five mock cases pinned
+          `doctor_id: 393`/`395` — auto-increment values from one developer's
+          database. Against a freshly seeded database those rows do not exist,
+          so M4 and M9 failed for reasons unrelated to what they test. A case's
+          `script` may now be a function of the run's fixtures, and the id is
+          resolved from the database. Same class as the 2.8 date bomb.
+        - *The MCP smokes cannot work without `backend/.env`.* They scrub the
+          database and JWT variables from the spawned child precisely to prove
+          the server finds that file itself — and the file is gitignored, so it
+          does not exist on a runner. The workflow writes it before that step.
+      - *Verified locally against a throwaway MySQL on a separate port* — the
+        full sequence, both smokes, the ratchet in all three directions, all
+        four lockfiles `npm ci`-clean, and the Docker build.
+
 - [ ] **6.5** Architecture diagram in the README — the one-tool-layer,
       two-consumers shape.
 - [ ] **6.6** `config/mysql.js`: `createConnection` → `createPool`, fixing the
@@ -1135,6 +1178,26 @@ Each of these maps to an explicit line on the target job description.
         and its own mutation testing rather than a ride-along.
       - Numbered 6.6 rather than inserted earlier so that 6.2-6.5, which are
         cross-referenced from Phases 5 and 7, keep their numbers.
+- [ ] **6.7** Backend ESLint: add a config, run it, triage and fix or configure
+      its findings, and wire it into 6.4's CI.
+      - Deliberately NOT bundled into 6.4. A fresh config across ~60 backend
+        files would have turned CI wiring into a lint-adoption-and-triage job —
+        the same tangle the frontend errors already demonstrate.
+      - The backend's correctness and security are already held by the test
+        suite, the mutation testing and the `CLAUDE.md` rules, which catch
+        domain-specific problems a general linter cannot. Backend lint is
+        hygiene, and deserves its own focused pass.
+- [ ] **6.8** Frontend test runner — Vitest + React Testing Library, for
+      `frontend/` and `admin/`.
+      - The missing prerequisite for 6.9. Both apps have **no test tooling at
+        all**, which is why 6.4 could only ratchet their lint errors rather
+        than fix them.
+- [ ] **6.9** Clear the remaining 11 frontend/admin lint errors — 6
+      `set-state-in-effect`, 4 `only-export-components`, 1 `immutability` — and
+      lower the ratchet baseline to zero.
+      - **After 6.8, not before.** These change when state updates run and
+        which module a context is imported from; fixing effect behaviour before
+        the tests that would catch a regression exist is backwards.
 
 ---
 

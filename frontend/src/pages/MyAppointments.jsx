@@ -10,7 +10,11 @@ const MyAppointments = () => {
 
   const [appointments, setAppointments] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [hiddenAppointments, setHiddenAppointments] = useState([]);
+  // Only the setter is used: the list itself is read straight from
+  // localStorage at each point of use, so holding the value here as well
+  // was a second copy nothing consulted. The state still exists and still
+  // re-renders — this drops the unread binding, not the state.
+  const [, setHiddenAppointments] = useState([]);
 
   const [showCancelModal, setShowCancelModal] = useState(false);
   const [selectedAppointmentId, setSelectedAppointmentId] = useState(null);

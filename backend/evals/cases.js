@@ -21,6 +21,17 @@ import { INJECTION_MARKER, INJECTED_BIO } from './harness.js';
 //   mode: 'live' — runs only from `npm run eval`. Costs quota. Reserved for
 //                  properties where the real model IS the thing under test.
 //
+// `script` may be an ARRAY or a FUNCTION of the run's fixtures.
+//
+// It became a function for the cases that name a doctor: they used to hardcode
+// ids (393, 395) taken from one developer's database, where auto-increment had
+// reached the 300s. On a freshly seeded database — which is what CI has — those
+// rows do not exist, `get_doctor` returns null, and the assertions about what
+// reaches the model fail for a reason that has nothing to do with the property
+// under test. Two of them did exactly that the first time CI ran.
+//
+// Only mock cases take fixtures; live cases have no script at all.
+
 // Live assertions are property-based on purpose. A live model's wording
 // varies, so asserting on prose asserts on noise. Each live case leans on the
 // strongest evidence available to it, in this order:
@@ -153,9 +164,9 @@ const mocked = [
     mode: 'mock',
     title: 'two tools in sequence within one turn',
     messages: ['tell me about your first dermatologist'],
-    script: [
+    script: ({ doctorId }) => [
       [toolCall('search_doctors', { speciality: 'Dermatologist' })],
-      [toolCall('get_doctor', { doctor_id: 395 })],
+      [toolCall('get_doctor', { doctor_id: doctorId })],
       [text('Here are the details.')],
     ],
     assert: ({ audit, events }) => {
@@ -174,9 +185,9 @@ const mocked = [
     id: 'M4',
     mode: 'mock',
     title: 'an availability result reaches the model with checked_at',
-    messages: ['is doctor 393 free tomorrow'],
-    script: [
-      [toolCall('check_availability', { doctor_id: 393, date: '2031-03-04' })],
+    messages: ['is that doctor free tomorrow'],
+    script: ({ doctorId }) => [
+      [toolCall('check_availability', { doctor_id: doctorId, date: '2031-03-04' })],
       [text('Twenty-two slots were free when I checked.')],
     ],
     assert: ({ audit, requests }) => {
@@ -265,10 +276,10 @@ const mocked = [
     mode: 'mock',
     title: 'three tool rounds in one turn stay under the iteration cap',
     messages: ['compare your dermatologists'],
-    script: [
+    script: ({ doctorId }) => [
       [toolCall('list_specialities', {})],
       [toolCall('search_doctors', { speciality: 'Dermatologist' })],
-      [toolCall('get_doctor', { doctor_id: 395 })],
+      [toolCall('get_doctor', { doctor_id: doctorId })],
       [text('Here is the comparison.')],
     ],
     assert: ({ reply, audit, events }) => {
@@ -282,9 +293,9 @@ const mocked = [
     id: 'M9',
     mode: 'mock',
     title: 'a doctor profile reaches the model labelled as unverified',
-    messages: ['tell me about doctor 393'],
-    script: [
-      [toolCall('get_doctor', { doctor_id: 393 })],
+    messages: ['tell me about that doctor'],
+    script: ({ doctorId }) => [
+      [toolCall('get_doctor', { doctor_id: doctorId })],
       [text('Here is their profile.')],
     ],
     assert: ({ requests }) => {
@@ -331,9 +342,9 @@ const mocked = [
     mode: 'mock',
     title: 'a full turn writes exactly one audit row per tool call',
     messages: ['find a dermatologist and check availability'],
-    script: [
+    script: ({ doctorId }) => [
       [toolCall('search_doctors', { speciality: 'Dermatologist' })],
-      [toolCall('check_availability', { doctor_id: 395, date: '2031-03-04' })],
+      [toolCall('check_availability', { doctor_id: doctorId, date: '2031-03-04' })],
       [text('Here is what I found.')],
     ],
     assert: ({ audit }) => {

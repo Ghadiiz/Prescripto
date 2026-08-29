@@ -1,0 +1,179 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+# A second push to the same branch cancels the first: the older run's verdict
+# is about code nobody is looking at any more.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Backend suite and MCP smokes
+    runs-on: ubuntu-latest
+
+    services:
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_ROOT_PASSWORD: ci-not-a-real-password
+          MYSQL_DATABASE: prescripto_ci
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h localhost -pci-not-a-real-password"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=20
+
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd="redis-cli ping"
+          --health-interval=5s
+          --health-timeout=3s
+          --health-retries=20
+
+    env:
+      # 127.0.0.1 is not a convenience: every suite refuses to run unless
+      # DB_HOST is localhost, which is what stops CI ever being pointed at
+      # Aiven. The guard is in the tests, and this satisfies it honestly.
+      DB_HOST: 127.0.0.1
+      DB_PORT: 3306
+      DB_USER: root
+      DB_PASSWORD: ci-not-a-real-password
+      DB_NAME: prescripto_ci
+      REDIS_URL: redis://localhost:6379
+      # A throwaway value. No real secret is needed anywhere in this job: the
+      # suites set their own fake GEMINI_API_KEY and stub fetch, and the eval
+      # that runs here is the mocked half by construction, so no provider quota
+      # is spent and no API key exists to leak.
+      JWT_SECRET: ci-jwt-secret-not-used-outside-this-job
+      NODE_ENV: test
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: |
+            backend/package-lock.json
+            mcp/package-lock.json
+
+      - name: Install backend dependencies
+        working-directory: backend
+        run: npm ci
+
+      - name: Install MCP dependencies
+        working-directory: mcp
+        run: npm ci
+
+      # schema.sql is the baseline and migrate.js deliberately does not apply
+      # it — in Docker it runs from docker-entrypoint-initdb.d, which a service
+      # container does not do. Hence three steps, in the order CLAUDE.md gives:
+      # schema, then migrate, then seed.
+      - name: Apply the baseline schema
+        working-directory: backend
+        run: mysql -h 127.0.0.1 -P 3306 -u root -p"$DB_PASSWORD" "$DB_NAME" < database/schema.sql
+
+      - name: Run migrations
+        working-directory: backend
+        run: npm run migrate
+
+      - name: Seed
+        working-directory: backend
+        run: npm run seed
+
+      - name: Backend test suite
+        working-directory: backend
+        run: npm test
+
+      # The MCP servers read backend/.env by a path derived from their own
+      # location, and the smokes SCRUB DB_HOST/DB_USER/DB_PASSWORD/DB_NAME/
+      # JWT_SECRET from the spawned child precisely to prove the server finds
+      # that file for itself. backend/.env is gitignored, so it does not exist
+      # on a runner — without this step the child starts with no database
+      # config at all and every tool call fails.
+      #
+      # Measured: the patient smoke failed here on the first CI rehearsal for
+      # exactly this reason. Writing the file reproduces the local arrangement
+      # the smokes are designed around rather than weakening what they check.
+      - name: Write backend/.env for the MCP servers
+        run: |
+          cat > backend/.env <<'ENVFILE'
+          DB_HOST=127.0.0.1
+          DB_PORT=3306
+          DB_USER=root
+          DB_PASSWORD=ci-not-a-real-password
+          DB_NAME=prescripto_ci
+          JWT_SECRET=ci-jwt-secret-not-used-outside-this-job
+          REDIS_URL=redis://localhost:6379
+          ENVFILE
+
+      # The only automated check mcp/ has. Drives both servers over real stdio
+      # pipes with real tokens minted from JWT_SECRET above.
+      - name: MCP smoke checks
+        working-directory: mcp
+        run: npm run smoke
+
+  lint:
+    name: Lint ratchet
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: |
+            frontend/package-lock.json
+            admin/package-lock.json
+
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - name: Install admin dependencies
+        working-directory: admin
+        run: npm ci
+
+      # Not a plain `eslint .`: both apps carry pre-existing errors that would
+      # make this red on every push. See scripts/lint-ratchet.mjs.
+      - name: Lint must not get worse
+        run: node scripts/lint-ratchet.mjs
+
+  build:
+    name: Docker build
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # Compose interpolates ${...} while PARSING the file, even for a
+      # build-only run, so the variables must exist or it warns and substitutes
+      # empty strings. None of these values is used by a build — they exist so
+      # the parse is clean.
+      - name: Generate a throwaway .env for Compose
+        run: |
+          cat > .env <<'ENVFILE'
+          DB_PASSWORD=ci-not-a-real-password
+          DB_NAME=prescripto_ci
+          JWT_SECRET=ci-jwt-secret-not-used-outside-this-job
+          CLOUDINARY_NAME=unused
+          CLOUDINARY_API_KEY=unused
+          CLOUDINARY_SECRET_KEY=unused
+          RESEND_API_KEY=unused
+          EMAIL_FROM=ci@example.invalid
+          ENVFILE
+
+      - name: Build all images
+        run: docker compose build

@@ -28,6 +28,7 @@ let harness;
 let ctx;
 let token;
 let requests;
+let doctorId;
 
 // Serves one scripted response per provider call, as SSE, so agentService's
 // real stream parsing is exercised rather than bypassed.
@@ -62,6 +63,19 @@ before(async () => {
   const userId = await createEvalPatient(harness.db, 'mock');
   ctx = { userId, role: 'patient' };
   token = tokenFor(userId);
+
+  // Resolved from THIS database, never hardcoded.
+  //
+  // Cases used to name doctor 393 and 395 — ids that existed only where they
+  // were written. Against a freshly seeded database those rows are absent,
+  // get_doctor returns null, and assertions about what reaches the model fail
+  // for reasons unrelated to the property under test. CI's first run caught
+  // exactly that.
+  const [[doctor]] = await harness.db.query(
+    'SELECT id FROM doctors WHERE available = 1 ORDER BY id LIMIT 1',
+  );
+  assert.ok(doctor, 'the eval needs at least one available doctor — run the seed');
+  doctorId = doctor.id;
 });
 
 after(async () => {
@@ -89,7 +103,15 @@ afterEach(async () => {
 
 for (const testCase of mockedCases) {
   test(`${testCase.id} — ${testCase.title}`, async () => {
-    scriptProvider(testCase.script);
+    // A case's script may be a function of the run's fixtures, because ids
+    // must come from THIS database rather than from whichever one the case was
+    // written against. See the note in cases.js.
+    const script =
+      typeof testCase.script === 'function'
+        ? testCase.script({ doctorId })
+        : testCase.script;
+
+    scriptProvider(script);
 
     const result = await runCase({
       chat: harness.chat,
