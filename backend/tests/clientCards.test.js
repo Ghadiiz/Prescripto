@@ -34,8 +34,19 @@ const availabilityResult = {
   accepting_appointments: true,
   checked_at: '2026-08-21T12:46:13.377Z',
   dates: [
-    { date: '2026-08-25', available: true, free_slot_count: 22 },
-    { date: '2026-08-24', available: false, free_slot_count: 0, reason: 'date_in_past' },
+    {
+      date: '2026-08-25',
+      available: true,
+      free_slot_count: 3,
+      free_times: ['10:00 AM', '10:30 AM', '02:00 PM'],
+    },
+    {
+      date: '2026-08-24',
+      available: false,
+      free_slot_count: 0,
+      free_times: [],
+      reason: 'date_in_past',
+    },
   ],
   _unverified: ['doctor_name'],
 };
@@ -165,10 +176,15 @@ test('an availability card cannot exist without its checked_at', () => {
     availabilityResult.checked_at,
     'rule 7: a slot count must never travel without the time it was true',
   );
+  // 7.3 added `freeTimes`, and this deepEqual fired — which is what an exact
+  // shape assertion is FOR. Updated deliberately: the times come from a query
+  // that selects `appointment_time` alone, so this carries availability and
+  // never who holds a slot.
   assert.deepEqual(card.dates[0], {
     date: '2026-08-25',
     available: true,
-    freeSlotCount: 22,
+    freeSlotCount: 3,
+    freeTimes: ['10:00 AM', '10:30 AM', '02:00 PM'],
     reason: null,
   });
   assert.equal(card.dates[1].reason, 'date_in_past');

@@ -50,6 +50,9 @@ const toAvailabilityCard = (result) => ({
     date: day.date,
     available: day.available,
     freeSlotCount: day.free_slot_count,
+    // 7.3. Times, never who holds the other slots — the query behind these
+    // reads `appointment_time` and nothing else.
+    freeTimes: day.free_times ?? [],
     reason: day.reason ?? null,
   })),
 });

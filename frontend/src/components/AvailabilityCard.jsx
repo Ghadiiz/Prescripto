@@ -25,6 +25,11 @@ const formatTime = (iso) =>
     minute: '2-digit',
   });
 
+// A wide-open day is 22 half-hours. Twenty-two chips in a chat panel is a wall
+// of text, so the card shows the first few and counts the rest. Presentation
+// only — the model receives every time.
+const CHIPS_SHOWN = 6;
+
 const AvailabilityCard = ({ availability }) => {
   const { doctorName, acceptingAppointments, checkedAt, dates } = availability;
 
@@ -37,28 +42,53 @@ const AvailabilityCard = ({ availability }) => {
           ✗ Not currently accepting appointments
         </p>
       ) : (
-        <ul className="mt-1 space-y-1">
-          {dates.map((day) => (
-            <li
-              key={day.date}
-              className="flex items-center justify-between text-xs"
-            >
-              <span className="text-gray-600">{formatDate(day.date)}</span>
-              <span
-                className={
-                  day.available ? 'text-green-600' : 'text-gray-400'
-                }
-              >
-                {day.available
-                  ? `✓ ${day.freeSlotCount} ${
-                      day.freeSlotCount === 1 ? 'slot' : 'slots'
-                    } free`
-                  : `✗ none free${
-                      day.reason ? ` — ${REASONS[day.reason] ?? day.reason}` : ''
-                    }`}
-              </span>
-            </li>
-          ))}
+        <ul className="mt-1 space-y-2">
+          {dates.map((day) => {
+            const times = day.freeTimes ?? [];
+            const shown = times.slice(0, CHIPS_SHOWN);
+            const hidden = times.length - shown.length;
+
+            return (
+              <li key={day.date} className="text-xs">
+                <div className="flex items-center justify-between">
+                  <span className="text-gray-600">{formatDate(day.date)}</span>
+                  <span
+                    className={
+                      day.available ? 'text-green-600' : 'text-gray-400'
+                    }
+                  >
+                    {day.available
+                      ? `✓ ${day.freeSlotCount} ${
+                          day.freeSlotCount === 1 ? 'slot' : 'slots'
+                        } free`
+                      : `✗ none free${
+                          day.reason
+                            ? ` — ${REASONS[day.reason] ?? day.reason}`
+                            : ''
+                        }`}
+                  </span>
+                </div>
+
+                {shown.length > 0 && (
+                  <div className="mt-1 flex flex-wrap gap-1">
+                    {shown.map((time) => (
+                      <span
+                        key={time}
+                        className="rounded-full border border-gray-200 bg-gray-50 px-2 py-0.5 text-[11px] text-gray-600"
+                      >
+                        {time}
+                      </span>
+                    ))}
+                    {hidden > 0 && (
+                      <span className="px-1 py-0.5 text-[11px] text-gray-400">
+                        +{hidden} more
+                      </span>
+                    )}
+                  </div>
+                )}
+              </li>
+            );
+          })}
         </ul>
       )}
 

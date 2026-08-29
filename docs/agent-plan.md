@@ -309,13 +309,21 @@ not lost; none blocks the current phase.
   the abort on close.
 
   **Fixed in 6.8**, as the "Phase 6 candidate" this entry predicted: Vitest +
-  React Testing Library in both apps, with 36 characterisation tests. Note what
-  it does NOT yet cover — the 36 were written to protect 6.9's refactor
-  targets, so the rule-7 concern above (the checked-at caveat in
-  `AvailabilityCard.jsx`, the allowlisted card fields, the launcher hiding when
-  signed out) is still held by the backend test and by review. **The runner now
-  exists, so porting those checks is a normal piece of work rather than an
-  infrastructure project.** *Found during 3.2, runner built in 6.8.*
+  React Testing Library in both apps, with 36 characterisation tests — written
+  to protect 6.9's refactor targets, so they covered none of the rule-7
+  concern above.
+
+  **7.3 closed the largest part of it:** the checked-at caveat in
+  `AvailabilityCard.jsx` is now pinned on the render side four ways — with
+  times, without times, on a past date, and for a doctor not accepting at all
+  — and a mutation removing the caveat fails four tests. It was the item this
+  entry singled out, because it was the one held by nothing but a human
+  reading the diff.
+
+  **Still open:** the allowlisted card fields and the launcher hiding when
+  signed out. The runner exists and one of these has been done, so the rest is
+  ordinary work rather than an infrastructure project. *Found during 3.2,
+  runner built in 6.8, caveat pinned in 7.3.*
 
 - **The chat panel cannot rehydrate its thread.** 2.6 stores the last 10 turns
   per `(user_id, role)` and 2.7 replays them to the model, but there is no
@@ -1744,7 +1752,7 @@ goes last. **7.5 sits after all of them for a different reason** — it consumes
       DOES post — was added alongside, so the selection is proven real rather
       than cosmetic.
 
-- [ ] **7.3** **Specific-slot availability answers.** `check_availability`
+- [x] **7.3** **Specific-slot availability answers.** `check_availability`
       returns a free-slot COUNT plus `checked_at`, so the model *cannot* answer
       "is 10am–2pm free?" — it has no per-slot data to reason over. Return the
       actual free/booked times for a date so it can say "10–12 is booked, 12–2
@@ -1761,6 +1769,69 @@ goes last. **7.5 sits after all of them for a different reason** — it consumes
         is a real budget question, not a rounding error — consider returning
         slots only when the question is time-specific, or a compact
         representation rather than a full list.
+
+      **That cost warning was checked rather than assumed, and it was milder
+      than it read.** Two things:
+
+      - **Tool results are never persisted.** `conversationStore.appendTurn`
+        stores only user and assistant TEXT, so a large result costs tokens
+        once inside a single agent loop and never accumulates into replayed
+        history.
+      - **The budget counts MODEL CALLS, not tokens** (`GEMINI_DAILY_CALL_CAP`,
+        default 50). A shape that saves tokens by forcing a second round trip —
+        "which day?" then "what times?" — spends the resource that is actually
+        scarce to save one that is not.
+
+      So the full list was the right call, and the size was MEASURED rather
+      than guessed: a 3-day result serialises to **1101 characters** (~275
+      tokens), putting a 7-day worst case around 640. One call now answers both
+      "which day" and "what time".
+
+      - Each `dates` entry gains **`free_times`** beside `free_slot_count` —
+        the array `getAvailableSlots` already built and this tool discarded one
+        line before returning. Present on EVERY branch, `[]` for past and
+        errored dates, so the model never reasons about a missing field.
+      - **Rule 4 holds without any new work**, and the entry says why: the
+        times come from `findAppointmentsByDoctorAndDate`, whose query is
+        `SELECT appointment_time` alone. "10:30 is taken" is availability;
+        "10:30 is taken by Sara" would be a patient's medical appointment, and
+        nothing here can reach it. A test asserts the shape is clock strings,
+        not objects that could acquire a name later.
+      - **Rule 7 got harder, so it got louder.** Naming a time makes a snapshot
+        far more tempting to read as a promise than a count ever was. The tool
+        description and the system prompt both say so explicitly now, and
+        `checked_at` is still taken once before the loop.
+      - **Two system-prompt paragraphs were corrected**, not left to rot: they
+        described availability as "how many slots were free" and the card as
+        showing "free-slot counts". Both stopped being true.
+      - **The card shows the times** as chips, capped at 6 with "+N more" — a
+        wide-open day is 22 half-hours and 22 chips in a chat panel is a wall.
+        The cap is presentation only; the model receives every time.
+
+      **Two test gaps this exposed, both closed here:**
+
+      - **`check_availability` had no suite of its own.** It was covered
+        sideways — the guardrail sweep proved no banned field appeared, and
+        `clientCards.test.js` exercised the card projection of a hand-written
+        fixture. Neither touched the date-in-past guard, the not-accepting
+        branch or the multi-day loop. `backend/tests/checkAvailability.test.js`
+        now does, including the invariant that would catch the two halves
+        drifting: `free_times.length === free_slot_count` on every entry.
+      - **`AvailabilityCard` had no frontend test at all**, which the 6.8 Known
+        Issue named precisely: the rule-7 caveat was held "by a human reading
+        the diff". It is now pinned four ways — with times, without times, on a
+        past date, and for a doctor not accepting at all.
+
+      `clientCards.test.js` asserts the card's date shape with `deepEqual`, so
+      `freeTimes` fired it — which is what an exact-shape assertion is for. A
+      deliberate, explained update, like 7.2's payload key-set.
+
+      **Verification.** 14 new tests (backend 309, frontend 68) and **10
+      mutations, all caught** — including one against `getAvailableSlots`
+      itself, so that offering the whole grid regardless of bookings fails a
+      test. Exercised live against the real database: booking 11:30 removes
+      `11:30 AM` from `free_times` while 11:00 and 12:00 stay, and the count
+      drops by exactly one.
 
 - [ ] **7.4** **Time-range waitlist** (schema change — the biggest item, last).
       `join_waitlist` and the `waitlist` table are DATE-range only
