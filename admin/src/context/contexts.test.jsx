@@ -2,16 +2,22 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { useContext } from 'react';
 
-import AdminContextProvider, { AdminContext } from './AdminContext';
-import DoctorContextProvider, { DoctorContext } from './DoctorContext';
-import AppContextProvider, { AppContext } from './AppContext';
+import AdminContextProvider from './AdminContextProvider';
+import DoctorContextProvider from './DoctorContextProvider';
+import AppContextProvider from './AppContextProvider';
+import { AdminContext } from './AdminContext';
+import { DoctorContext } from './DoctorContext';
+import { AppContext } from './AppContext';
 
 // CHARACTERISATION, ahead of 6.9.
 //
 // All three of these files carry the `react-refresh/only-export-components`
-// error, and the fix is to move `export const XContext = createContext()` into
-// its own module — which changes the import path in 22 consumer files across
-// this app.
+// error, and the fix splits the provider out into its own module. The context
+// object keeps this filename, which is what leaves the 22 consumer imports in
+// this app untouched.
+//
+// 6.9 repointed the three provider imports above and this comment — nothing
+// else in this file changed.
 //
 // So what these pin is CONSUMPTION: import the provider and the context the way
 // a page does, render one inside the other, and read a value back out. If the

@@ -84,6 +84,25 @@ it opens a connection.
 Pre-existing app bugs found while building something else. Logged so they are
 not lost; none blocks the current phase.
 
+- **`npm run server` and `npm test` share one Redis queue, and the dev
+  server's worker steals the tests' jobs.** Running the backend suite with a
+  dev server up produced **9 spurious failures** — all 8 behavioural tests in
+  `waitlistQueue.test.js` plus one in `doctorTools.test.js`. The queue ones
+  fail as "exactly one job should be queued: 0 !== 1": the job WAS enqueued,
+  and the running server's BullMQ worker consumed it before the assertion
+  looked. Stop the dev server and the same suite is green (262 pass, 0 fail);
+  `waitlistQueue.test.js` alone passes 12/12.
+
+  **Not a code defect and deliberately not "fixed" here.** A separate test
+  queue name would be a change to production wiring to accommodate a local
+  habit. **CI is unaffected** — it starts fresh MySQL and Redis services and
+  never runs a dev server alongside the suite.
+
+  The trap is that the failures look like real queue bugs rather than
+  interference, and the first instinct is to debug the queue. **Stop the dev
+  server before `npm test`.** *Found during 6.9, while smoke-testing the
+  frontends in a browser with the API running.*
+
 - **`GET /api/appointments/available-slots` reports past dates as free.**
   `getAvailableSlots` only special-cases *today* — for any earlier date
   `isToday` is false, so it generates the full 10:00–21:00 grid minus bookings
@@ -279,9 +298,9 @@ not lost; none blocks the current phase.
   lines — but worth a glance in a real browser tab when convenient. *Found
   during 5.2.*
 
-- **`frontend/` has no test runner, so UI guarantees rest on discipline.** The
-  backend has 129 tests and a mutation-testing habit; the patient app has
-  `eslint` and nothing else. That matters most for **rule 7**: the checked-at
+- **RESOLVED in 6.8 — `frontend/` had no test runner, so UI guarantees rested
+  on discipline.** The backend had 129 tests and a mutation-testing habit; the
+  patient app had `eslint` and nothing else. That matters most for **rule 7**: the checked-at
   caveat in `AvailabilityCard.jsx` is protected only by the backend test that
   forces `checkedAt` to ship, and by the line being rendered unconditionally so
   no data shape can drop it. Deleting the line is caught by a human reading the
@@ -289,10 +308,14 @@ not lost; none blocks the current phase.
   cards rendering only allowlisted fields, the launcher hiding when signed out,
   the abort on close.
 
-  **Phase 6 candidate:** wire up Vitest + React Testing Library and port the
-  browser checks done by hand in 3.1-3.2 into real tests. Not urgent while the
-  UI is small, and deliberately not bolted onto a UI increment. *Found during
-  3.2.*
+  **Fixed in 6.8**, as the "Phase 6 candidate" this entry predicted: Vitest +
+  React Testing Library in both apps, with 36 characterisation tests. Note what
+  it does NOT yet cover — the 36 were written to protect 6.9's refactor
+  targets, so the rule-7 concern above (the checked-at caveat in
+  `AvailabilityCard.jsx`, the allowlisted card fields, the launcher hiding when
+  signed out) is still held by the backend test and by review. **The runner now
+  exists, so porting those checks is a normal piece of work rather than an
+  infrastructure project.** *Found during 3.2, runner built in 6.8.*
 
 - **The chat panel cannot rehydrate its thread.** 2.6 stores the last 10 turns
   per `(user_id, role)` and 2.7 replays them to the model, but there is no
@@ -1331,7 +1354,7 @@ Each of these maps to an explicit line on the target job description.
         `EditDoctor` reads `doctorOptions.specialities` with no guard, so the
         stub needed the real shape. Worth distinguishing — a characterisation
         test "fixed" by changing the component would defeat its purpose.
-- [ ] **6.9** Clear the remaining 11 frontend/admin lint errors — 6
+- [x] **6.9** Clear the remaining 11 frontend/admin lint errors — 6
       `set-state-in-effect`, 4 `only-export-components`, 1 `immutability` — and
       lower the ratchet baseline to zero.
       - **After 6.8, not before.** These change when state updates run and
@@ -1344,10 +1367,77 @@ Each of these maps to an explicit line on the target job description.
         to absorb by adjusting the test. Editing the net to fit the refactor
         would leave no evidence the behaviour held, which is the only thing
         6.8 was built to provide.
-      - The 4 `only-export-components` fixes move each `createContext()` export
-        into its own module, changing the import path in **35 consumer files**
-        (13 + 11 + 8 + 3). The context tests pin provider/consumer pairing so a
-        half-applied move fails rather than silently yielding `undefined`.
+      - **Outcome: all 36 pass, and the two-file exception below was agreed in
+        advance rather than discovered while forcing them green.**
+
+      *Not all 11 were the same kind of error, and treating them alike would
+      have been the mistake:*
+
+      - **3 were genuine derived state.** `RelatedDoctors` and `Doctors` kept a
+        `useState` an effect immediately overwrote — now `useMemo`, state and
+        effect deleted. `MyProfile.phoneData` is edited by the form, so it
+        stays state and uses React's documented render-phase adjustment
+        (`if (prevPhone !== userData?.phone)`), which preserves the re-split on
+        change that the "derive when the editor opens" shortcut would have lost.
+      - **3 were false positives.** `VerifyEmail` and both `AppContext` mount
+        effects setState *after* an `await`; the rule cannot see past a bare
+        call and reports it as synchronous. Fixed by awaiting inside an inner
+        `async` function in the effect — verified with `eslint --stdin` that
+        this is clean while `void load()` is not. **No `eslint-disable` was
+        added**: the repo still has none.
+      - **A 12th error was masked, and that is the lesson worth keeping.** The
+        rule reports once per effect, so `AppContext`'s `setUserData(false)` —
+        a genuinely synchronous setState in the `else` branch — only surfaced
+        once the first error in that effect was fixed. Moving the whole
+        `if/else` inside the async wrapper cleared it. "11" was the count
+        before starting, not the count to fix.
+
+        **This is the concrete argument for the no-`eslint-disable` line.** The
+        tempting shortcut for the three false positives was one
+        `eslint-disable-next-line` each. On `AppContext`'s token effect that
+        suppression would have sat directly on top of a REAL synchronous
+        setState that nothing had reported yet — silencing a rule about an
+        error that had not been seen, and leaving no trace to come back to.
+        Restructuring surfaced it; suppressing would have buried it. A
+        suppression is only ever as safe as the diagnostics it hides, and a
+        rule that reports once per effect means you cannot know what those
+        are.
+      - **1 was pure code motion:** `EditDoctor`'s `fetchDoctorFromAPI` moved
+        above the effect that calls it.
+
+      *The export split went the other direction from the one planned in 6.8:*
+
+      - Each `XContext.jsx` **keeps its filename and its `createContext()`**;
+        the PROVIDER moves to a new `XContextProvider.jsx`. That leaves all
+        **39 `import { XContext }` lines across 35 consumer files untouched** —
+        the opposite split would have rewritten every one of them for the same
+        result. Only the two `main.jsx` files change.
+      - A re-export barrel was tested first and still trips the rule, so
+        keeping both names in one file was not available.
+      - **The agreed exception to the contract:** the 2 test files that import
+        a *provider* needed their import line repointed — 1 line in
+        `frontend/src/context/AppContext.test.jsx`, 3 in
+        `admin/src/context/contexts.test.jsx`, plus the comment in each that
+        described the opposite split. **No assertion, fixture or test body
+        changed, and the other 5 test files were not touched at all**; the diff
+        was reviewed over `*.test.jsx` alone so that was verifiable rather than
+        asserted.
+      - **The net still has teeth after the refactor**, which matters more than
+        the suite being green: all 7 mutations (the 6 from 6.8, re-expressed
+        against the refactored code, plus the profile-load path) still fail
+        their tests. A refactor that quietly made a test vacuous would show up
+        here as a mutation that stopped failing.
+      - Verified beyond the suite: both apps build, and in the running dev
+        servers each context module exports only its context object and each
+        provider module only a default component — `main.jsx` is the one
+        consumer no test renders, and a wrong provider import renders as
+        `undefined` context rather than as an error.
+      - `scripts/lint-baseline.json` is now **zero for all four packages**. The
+        ratchet stays: at zero its equality check is exactly "eslint must
+        pass", and it is what keeps a future package from being added at a
+        nonzero count without that being a committed decision. Its header
+        comment, which said the frontends would not lint clean for a while, was
+        corrected rather than left to mislead.
 
 - [ ] **6.10** Parameterised-query lint rule: allowlist the known-safe
       interpolation patterns and flag dangerous value interpolation.

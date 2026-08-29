@@ -49,7 +49,17 @@ const VerifyEmail = () => {
   };
 
   useEffect(() => {
-    verifyEmail();
+    // Awaited inside the effect rather than called bare, which is what makes
+    // the asynchrony explicit — to a reader, and to
+    // `react-hooks/set-state-in-effect`, which cannot see past a bare call and
+    // so reported the post-request setStates as if they were synchronous.
+    // (The missing-token branch does still setState before any await; it
+    // returns immediately and costs one extra render, as it did before.)
+    const run = async () => {
+      await verifyEmail();
+    };
+
+    run();
   }, []);
 
   return (

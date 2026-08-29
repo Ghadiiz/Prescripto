@@ -1,16 +1,15 @@
-import React, { useContext, useEffect, useState } from 'react';
+import React, { useContext, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { AppContext } from '../context/AppContext';
 
 const Doctors = () => {
   const navigate = useNavigate();
   const { speciality } = useParams();
-  const [filterDoc, setFilterDoc] = useState([]);
   const [showFilter, setShowFilter] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const { doctors } = useContext(AppContext);
 
-  const applyFilter = () => {
+  const filterDoc = useMemo(() => {
     let filtered = doctors;
 
     if (speciality) {
@@ -26,11 +25,7 @@ const Doctors = () => {
       );
     }
 
-    setFilterDoc(filtered);
-  };
-
-  useEffect(() => {
-    applyFilter();
+    return filtered;
   }, [doctors, speciality, searchQuery]);
 
   return (

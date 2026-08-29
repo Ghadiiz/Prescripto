@@ -4,18 +4,20 @@ import { readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-// A lint ratchet, because the frontends do not lint clean and will not for a
-// while.
+// A lint ratchet.
 //
-// `frontend` and `admin` carry pre-existing errors that CLAUDE.md has recorded
-// for months: React effect rules and context exports whose fixes change
-// behaviour, in apps with no test suite to catch a regression. A CI step that
-// simply ran eslint would be red on every push and would stop being read
-// within a week.
+// It exists because `frontend` and `admin` carried pre-existing errors that
+// CLAUDE.md had recorded for months: React effect rules and context exports
+// whose fixes change behaviour, in apps with no test suite to catch a
+// regression. A CI step that simply ran eslint would have been red on every
+// push and would have stopped being read within a week. So the gate became "no
+// worse than the committed baseline" — enforceable that day, and the only
+// version of the check that prevented a regression rather than describing one.
 //
-// So the gate is "no worse than the committed baseline". That is enforceable
-// today, and it is the only version of this check that actually prevents a
-// regression rather than describing one.
+// **As of 6.9 every baseline is zero**, so the gate now means "eslint must
+// pass". The ratchet stays anyway: it is what makes reaching zero visible in
+// one file, and it is what keeps a future app from being added at a nonzero
+// count without that being a deliberate, committed decision.
 //
 // It fails when the count goes UP, and — deliberately — also when it goes
 // DOWN. A ceiling nobody lowers drifts away from reality until it admits a new

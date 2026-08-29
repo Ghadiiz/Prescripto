@@ -82,25 +82,9 @@ const EditDoctor = () => {
     }
   };
 
-  useEffect(() => {
-    const loadDoctorData = async () => {
-      if (!doctors || doctors.length === 0) {
-        await getAllDoctors();
-      }
-
-      const doctor = doctors.find((doc) => doc.id === parseInt(id));
-
-      if (doctor) {
-        applyDoctorToForm(doctor);
-        setLoading(false);
-      } else {
-        fetchDoctorFromAPI();
-      }
-    };
-
-    loadDoctorData();
-  }, [id, doctors]);
-
+  // Declared above the effect that calls it: a function hoisted past its own
+  // use point cannot be updated when its captured values change, which is what
+  // `react-hooks/immutability` was reporting.
   const fetchDoctorFromAPI = async () => {
     try {
       const { data } = await axios.get(backendUrl + `/api/admin/doctors`, {
@@ -125,6 +109,25 @@ const EditDoctor = () => {
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    const loadDoctorData = async () => {
+      if (!doctors || doctors.length === 0) {
+        await getAllDoctors();
+      }
+
+      const doctor = doctors.find((doc) => doc.id === parseInt(id));
+
+      if (doctor) {
+        applyDoctorToForm(doctor);
+        setLoading(false);
+      } else {
+        fetchDoctorFromAPI();
+      }
+    };
+
+    loadDoctorData();
+  }, [id, doctors]);
 
   const onSubmitHandler = async (event) => {
     event.preventDefault();

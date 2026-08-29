@@ -1,19 +1,17 @@
-import React, { useContext, useEffect, useState } from 'react';
+import React, { useContext, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { AppContext } from '../context/AppContext';
 
 const RelatedDoctors = ({ speciality, docId }) => {
   const navigate = useNavigate();
   const { doctors } = useContext(AppContext);
-  const [relDoc, setRelDoc] = useState([]);
 
-  useEffect(() => {
-    if (doctors.length > 0 && speciality) {
-      const doctorsData = doctors.filter(
-        (doc) => doc.speciality === speciality && doc._id !== docId,
-      );
-      setRelDoc(doctorsData);
-    }
+  const relDoc = useMemo(() => {
+    if (!speciality) return [];
+
+    return doctors.filter(
+      (doc) => doc.speciality === speciality && doc._id !== docId,
+    );
   }, [doctors, speciality, docId]);
 
   return relDoc.length > 0 ? (

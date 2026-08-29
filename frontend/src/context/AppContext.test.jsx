@@ -3,7 +3,8 @@ import { render, screen, waitFor } from '@testing-library/react';
 import { useContext } from 'react';
 import axios from 'axios';
 
-import AppContextProvider, { AppContext } from './AppContext';
+import AppContextProvider from './AppContextProvider';
+import { AppContext } from './AppContext';
 
 // CHARACTERISATION, ahead of 6.9.
 //
@@ -11,10 +12,13 @@ import AppContextProvider, { AppContext } from './AppContext';
 //
 //   1. the two mount effects (`set-state-in-effect` at lines 50 and 55) — the
 //      doctor fetch and the token-driven profile load;
-//   2. how the context is CONSUMED. 6.9's `only-export-components` fix moves
-//      `export const AppContext` into its own module, changing the import path
-//      in 13 files. This test imports the context and the provider the way a
-//      consumer does, so a move that breaks consumption fails here.
+//   2. how the context is CONSUMED. 6.9's `only-export-components` fix splits
+//      the provider out of this module. This test imports the context and the
+//      provider the way a consumer does, so a split that breaks the pairing
+//      fails here.
+//
+// 6.9 repointed the provider import above and this comment — nothing else in
+// this file changed.
 
 vi.mock('axios');
 vi.mock('react-toastify', () => ({

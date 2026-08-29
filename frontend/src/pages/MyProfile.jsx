@@ -1,4 +1,4 @@
-import React, { useContext, useState, useEffect } from 'react';
+import React, { useContext, useState } from 'react';
 import { AppContext } from '../context/AppContext';
 import axios from 'axios';
 import { toast } from 'react-toastify';
@@ -42,9 +42,17 @@ const MyProfile = () => {
     parsePhoneNumber(userData?.phone),
   );
 
-  useEffect(() => {
+  // `phoneData` is not purely derived — the form edits it — so it stays state,
+  // and a stored number that changes underneath us (a save, a profile reload)
+  // has to be re-split. React's documented way to do that is to adjust during
+  // render rather than in an effect, which is also what avoids the extra
+  // render pass an effect would cost.
+  const [prevPhone, setPrevPhone] = useState(userData?.phone);
+
+  if (prevPhone !== userData?.phone) {
+    setPrevPhone(userData?.phone);
     setPhoneData(parsePhoneNumber(userData?.phone));
-  }, [userData?.phone]);
+  }
 
   const formatDateForInput = (dateString) => {
     if (!dateString) return '';
