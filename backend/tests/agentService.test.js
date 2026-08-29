@@ -1,5 +1,7 @@
-import { test, beforeEach, afterEach } from 'node:test';
+import { test, after, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
+
+import { closeRedis } from '../src/config/redis.js';
 
 import {
   generate,
@@ -41,11 +43,11 @@ const stubFetch = (queue) => {
   };
 };
 
-beforeEach(() => {
+beforeEach(async () => {
   // The daily call counter is module state shared across a whole suite. Left
   // to accumulate it would drift toward the cap and fail unrelated tests later
   // in the run — the same reason resetRateLimits() exists.
-  resetBudget();
+  await resetBudget();
   process.env.GEMINI_API_KEY = FAKE_KEY;
   // Keep retry waits negligible; the jitter maths is asserted directly below.
   process.env.GEMINI_RETRY_BASE_MS = '1';
@@ -239,4 +241,10 @@ test('our message shape maps to the provider shape, and back', async () => {
     'toolCalls',
     'usage',
   ]);
+});
+// 6.1: the stores may hold a Redis socket open, which would keep this process
+// alive after the last test and hang the runner. Closing it is teardown, not
+// cleanup of state.
+after(async () => {
+  await closeRedis();
 });

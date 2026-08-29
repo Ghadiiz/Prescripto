@@ -1,6 +1,8 @@
 import { test, before, after, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
 
+import { closeRedis } from '../src/config/redis.js';
+
 import { connectDB, getDB } from '../src/config/mysql.js';
 import {
   loadHistory,
@@ -43,10 +45,11 @@ before(async () => {
 
 after(async () => {
   await db.end();
+  await closeRedis();
 });
 
 const cleanup = async () => {
-  resetBudget();
+  await resetBudget();
   await db.query('DELETE FROM conversations WHERE user_id = ?', [
     patientCtx.userId,
   ]);

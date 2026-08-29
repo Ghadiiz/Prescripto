@@ -1,6 +1,8 @@
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 
+import { closeRedis } from '../src/config/redis.js';
+
 import { connectDB, getDB } from '../src/config/mysql.js';
 import { tools, readOnlyTools, getTool } from '../src/assistant/tools/index.js';
 import { doctorTools } from '../src/assistant/doctorTools/index.js';
@@ -135,6 +137,7 @@ before(async () => {
 // socket. mysql.js has no close helper and does not need one for production.
 after(async () => {
   await db.end();
+  await closeRedis();
 });
 
 // Relies on zod v4 .strict() schemas still exposing their keys via

@@ -1,5 +1,7 @@
 import { test, before, after, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
+
+import { closeRedis } from '../src/config/redis.js';
 import { readFileSync } from 'node:fs';
 
 import { scopeCheck } from '../src/assistant/guardrails/scopeCheck.js';
@@ -41,6 +43,7 @@ before(async () => {
 
 after(async () => {
   await db.end();
+  await closeRedis();
 });
 
 afterEach(async () => {

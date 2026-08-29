@@ -1,6 +1,8 @@
 import { test, before, after, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
 
+import { closeRedis } from '../src/config/redis.js';
+
 import {
   startHarness,
   tokenFor,
@@ -65,11 +67,12 @@ before(async () => {
 after(async () => {
   if (ctx) await deleteEvalPatient(harness.db, ctx.userId);
   await harness.close();
+  await closeRedis();
 });
 
 const cleanup = async () => {
-  resetRateLimits();
-  resetBudget();
+  await resetRateLimits();
+  await resetBudget();
   await harness.db.query('DELETE FROM conversations WHERE user_id = ?', [
     ctx.userId,
   ]);

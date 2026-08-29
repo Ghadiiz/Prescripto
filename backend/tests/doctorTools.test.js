@@ -1,6 +1,8 @@
 import { test, before, after, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
 
+import { closeRedis } from '../src/config/redis.js';
+
 import { connectDB, getDB } from '../src/config/mysql.js';
 import { doctorTools, getDoctorTool } from '../src/assistant/doctorTools/index.js';
 import { tools as patientTools, getTool } from '../src/assistant/tools/index.js';
@@ -95,6 +97,7 @@ before(async () => {
 after(async () => {
   await db.query('DELETE FROM users WHERE email LIKE ?', [`${EMAIL_PREFIX}%`]);
   await db.end();
+  await closeRedis();
 });
 
 const clear = async () => {

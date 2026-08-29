@@ -14,6 +14,15 @@ services:
       interval: 5s
       timeout: 5s
       retries: 10
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
   backend:
     build: ./backend
     ports:
@@ -35,8 +44,12 @@ services:
       FRONTEND_URL: http://localhost:5173
       ADMIN_PANEL_URL: http://localhost:5174
       ALLOWED_ORIGINS: http://localhost:5173,http://localhost:5174
+      # 6.1. Optional everywhere else; set here because the container exists.
+      REDIS_URL: redis://redis:6379
     depends_on:
       db:
+        condition: service_healthy
+      redis:
         condition: service_healthy
   frontend:
     build:

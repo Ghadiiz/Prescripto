@@ -1,5 +1,7 @@
-import { test } from 'node:test';
+import { test, after } from 'node:test';
 import assert from 'node:assert/strict';
+
+import { closeRedis } from '../src/config/redis.js';
 
 import { buildSystemPrompt } from '../src/assistant/systemPrompt.js';
 import { tools } from '../src/assistant/tools/index.js';
@@ -122,4 +124,9 @@ test('the prompt does not enumerate the tools', () => {
     [],
     `the prompt names ${named.join(', ')} — tool definitions are sent separately`,
   );
+});
+// 6.1: importing the tool registry reaches confirmations.js and so may open a
+// Redis socket. An open socket keeps this process alive after the last test.
+after(async () => {
+  await closeRedis();
 });

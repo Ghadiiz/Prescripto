@@ -105,8 +105,10 @@ not lost; none blocks the current phase.
   gate still reports ready**, so callers get 500s rather than the 503 that
   situation deserves. 0.7 fixed the startup race only. Switching to
   `mysql.createPool` would fix it (a pool replaces dead connections
-  transparently); **6.1** is the natural home, since it already reworks this
-  layer for Redis. *Found during 1.7.*
+  transparently). **Scheduled as 6.6.** This entry previously named 6.1 as the
+  natural home "since it already reworks this layer for Redis" — that premise
+  was wrong and was corrected when 6.1 was built: the Redis work never touches
+  `config/mysql.js`. *Found during 1.7.*
 
 - **RESOLVED in 5.6 — `doctorAuthMiddleware` could not tell a misconfigured
   server from a forged token.** It called `jwt.verify(token,
@@ -129,6 +131,18 @@ not lost; none blocks the current phase.
   `jwt.verify` with no secret check — and no verifier of its own. Not fixed
   here because no increment needed an admin ctx; the fix is the same three
   lines whenever one does.
+
+- **Two high-severity npm audit findings, both pre-existing.** `npm audit` in
+  `backend/` reports `ip-address` (via **express-rate-limit**) and
+  `brace-expansion` (via **nodemon**, a devDependency). Checked against the
+  lockfile at the time 6.1 added `ioredis`: **both predate this increment and
+  neither comes from ioredis**, whose subtree is clean.
+
+  Left alone deliberately. `npm audit fix` would move dependencies unrelated to
+  the increment being reviewed, which is precisely the kind of incidental
+  change the scope rules in `CLAUDE.md` exist to prevent. They want a
+  deliberate dependency-hygiene pass — one where the upgrades are the change
+  under review and can be tested as such. *Found during 6.1.*
 
 - **The `EXPLAIN` test does not pin the model to the query it explains.**
   `waitlistNotifier.test.js`'s test 13 runs its own copy of the waitlist match
@@ -953,7 +967,45 @@ runners, separate token files, separate processes.
 
 Each of these maps to an explicit line on the target job description.
 
-- [ ] **6.1** Redis: rate limiting and conversation storage moved off in-memory.
+- [x] **6.1** Redis: the assistant's in-memory state moved off-process — the
+      per-user **rate limiter**, the **confirmation tokens** (5.3) and the
+      **daily Gemini budget**.
+      - **The original line said "rate limiting and conversation storage", and
+        conversation storage was never in memory.** It went to MySQL in 2.6
+        (`conversations`, migration 003). Corrected here rather than left to
+        mislead whoever reads this next; what WAS in memory is the three above.
+      - **Redis is OPTIONAL.** No `REDIS_URL` → the same in-memory Maps as
+        before, so this deploys to Render with nothing provisioned. Three
+        states, and the code keeps them apart: **disabled** (unconfigured,
+        normal), **healthy**, **degraded** (configured but faulting).
+      - **Degradation is split, not uniform.** The limiter and the budget fall
+        back to memory — their cost of being wrong is a few extra turns, which
+        the old comments already accepted. **`spendConfirmation` fails CLOSED**:
+        with no way to prove single use, the one write tool writes nothing.
+        Collapsing disabled and degraded would have silently downgraded that
+        guarantee on every Redis hiccup.
+      - **Single use is ATOMIC via `GETDEL`** (Redis 6.2+), not GET-then-DEL.
+        Proven on a real server: 20 concurrent spends of one token → exactly
+        one winner. The binding is byte-identical to the in-memory version —
+        SHA-256 over `userId`, `role`, `sessionId` and the exact arguments,
+        recomputed independently and compared against the stored bytes — and
+        the 10-minute expiry is now the Redis key's own TTL (`PTTL` read back
+        at 599,998 ms).
+      - The sliding window is a **Lua script**, because ZCARD-then-ZADD has a
+        race the single-threaded in-memory version never had. Same instinct as
+        making double-booking a database guarantee.
+      - *A real bug the tests earned:* `lazyConnect` with `enableOfflineQueue:
+        false` meant the FIRST command on a fresh client was rejected before
+        the socket was ready — so in production the first request after every
+        boot would have taken the memory path silently, and the first
+        `spendConfirmation` after boot would have failed closed on a legitimate
+        write. Fixed with eager connect plus an `awaitReady()` gate.
+      - *A hollow test of my own, caught and fixed:* the budget rollover test
+        asserted only that two day LABELS differed and both counts were zero —
+        true whether or not the KEY carried the date, so the undayed-key
+        mutation passed it. It now seeds a real count.
+      - Verified **both ways**: 235/235 with `REDIS_URL` (12 Redis tests
+        running, 0 skipped) and 223 pass / 12 skip without it.
 - [ ] **6.2** BullMQ: the waitlist matcher becomes a background job rather than
       blocking the cancel response.
 - [ ] **6.3** `swagger-jsdoc` + `swagger-ui-express`. Document **the whole API**,
@@ -961,6 +1013,15 @@ Each of these maps to an explicit line on the target job description.
 - [ ] **6.4** GitHub Actions: lint, test, docker build on every push.
 - [ ] **6.5** Architecture diagram in the README — the one-tool-layer,
       two-consumers shape.
+- [ ] **6.6** `config/mysql.js`: `createConnection` → `createPool`, fixing the
+      no-mid-session-reconnect issue in Known issues.
+      - **Deferred out of 6.1 deliberately.** That entry used to say 6.1 was
+        its natural home "since it already reworks this layer" — which turned
+        out to be false: the Redis work never touches `config/mysql.js`. This
+        change affects every query in the app and deserves its own increment
+        and its own mutation testing rather than a ride-along.
+      - Numbered 6.6 rather than inserted earlier so that 6.2-6.5, which are
+        cross-referenced from Phases 5 and 7, keep their numbers.
 
 ---
 

@@ -1,6 +1,8 @@
 import { test, before, after, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
 
+import { closeRedis } from '../src/config/redis.js';
+
 import { connectDB, getDB } from '../src/config/mysql.js';
 import { runTool } from '../src/assistant/runTool.js';
 import { resetConfirmations } from '../src/assistant/confirmations.js';
@@ -83,10 +85,11 @@ after(async () => {
   // CASCADE takes the waitlist rows.
   await db.query('DELETE FROM users WHERE id IN (?, ?)', [patientA, patientB]);
   await db.end();
+  await closeRedis();
 });
 
 const clear = async () => {
-  resetConfirmations();
+  await resetConfirmations();
   await db.query('DELETE FROM waitlist WHERE user_id IN (?, ?)', [patientA, patientB]);
   await db.query('DELETE FROM assistant_audit_log WHERE user_id IN (?, ?)', [
     patientA,

@@ -1,5 +1,7 @@
-import { test, beforeEach, afterEach } from 'node:test';
+import { test, after, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
+
+import { closeRedis } from '../src/config/redis.js';
 
 import {
   generate,
@@ -116,8 +118,8 @@ const drain = async (stream) => {
   return events;
 };
 
-beforeEach(() => {
-  resetBudget();
+beforeEach(async () => {
+  await resetBudget();
   process.env.GEMINI_API_KEY = FAKE_KEY;
   process.env.GEMINI_RETRY_BASE_MS = '1';
   delete process.env.GEMINI_MODEL;
@@ -125,12 +127,12 @@ beforeEach(() => {
   delete process.env.GEMINI_DAILY_CALL_CAP;
 });
 
-afterEach(() => {
+afterEach(async () => {
   globalThis.fetch = realFetch;
   delete process.env.GEMINI_MODEL;
   delete process.env.GEMINI_MODELS;
   delete process.env.GEMINI_DAILY_CALL_CAP;
-  resetBudget();
+  await resetBudget();
 });
 
 // --- rotation ---------------------------------------------------------------
@@ -146,7 +148,7 @@ test('a daily-quota 429 rotates to the next model instead of retrying', async ()
     [MODELS[0], MODELS[1]],
     'the second request must go to a DIFFERENT model',
   );
-  assert.deepEqual(getBudget().exhaustedModels, [MODELS[0]]);
+  assert.deepEqual((await getBudget()).exhaustedModels, [MODELS[0]]);
 });
 
 test('a per-minute 429 retries the same model — it clears in seconds', async () => {
@@ -160,7 +162,7 @@ test('a per-minute 429 retries the same model — it clears in seconds', async (
     'a rate blip must not burn a model for the whole day',
   );
   assert.deepEqual(
-    getBudget().exhaustedModels,
+    (await getBudget()).exhaustedModels,
     [],
     'nothing is exhausted by a per-minute limit',
   );
@@ -201,7 +203,7 @@ test('every model exhausted throws AtCapacityError and stops calling out', async
   );
 
   assert.deepEqual(modelsCalled(), MODELS, 'all three tried exactly once');
-  assert.equal(isAtCapacity(), true);
+  assert.equal(await isAtCapacity(), true);
 
   // And the next turn does not try again.
   const before = calls.length;
@@ -237,7 +239,7 @@ test('the counter counts actual calls including retries, not user turns', async 
   await generate({ messages: [{ role: 'user', content: 'hi' }] });
 
   assert.equal(
-    getBudget().callsToday,
+    (await getBudget()).callsToday,
     3,
     'a retry is a real request against the quota and must be counted',
   );
@@ -250,8 +252,8 @@ test('at the cap, nothing is sent at all', async () => {
   await generate({ messages: [{ role: 'user', content: 'one' }] });
   await generate({ messages: [{ role: 'user', content: 'two' }] });
 
-  assert.equal(getBudget().remaining, 0);
-  assert.equal(isAtCapacity(), true);
+  assert.equal((await getBudget()).remaining, 0);
+  assert.equal(await isAtCapacity(), true);
 
   await assert.rejects(
     () => generate({ messages: [{ role: 'user', content: 'three' }] }),
@@ -273,10 +275,10 @@ test('the cap is read at call time, not captured at import', async () => {
   // captured at import would ignore this — the bug a 2.2 test caught in
   // baseDelayMs.
   process.env.GEMINI_DAILY_CALL_CAP = '1';
-  assert.equal(isAtCapacity(), true);
+  assert.equal(await isAtCapacity(), true);
 
   process.env.GEMINI_DAILY_CALL_CAP = '99';
-  assert.equal(isAtCapacity(), false);
+  assert.equal(await isAtCapacity(), false);
 });
 
 // --- the UTC-midnight reset -------------------------------------------------
@@ -296,12 +298,12 @@ test('crossing UTC midnight clears both the count and the exhausted models', asy
   const tomorrow = today + 2 * 60 * 1000;
   const tomorrowUtc = new Date(tomorrow).toISOString().slice(0, 10);
 
-  const before = getBudget(today);
+  const before = await getBudget(today);
   assert.equal(before.day, todayUtc);
   assert.ok(before.callsToday > 0);
   assert.ok(before.exhaustedModels.length > 0);
 
-  const after = getBudget(tomorrow);
+  const after = await getBudget(tomorrow);
   assert.equal(after.day, tomorrowUtc);
   assert.notEqual(tomorrowUtc, todayUtc, 'the two instants must straddle midnight');
   assert.equal(after.callsToday, 0, 'the daily count resets');
@@ -310,7 +312,7 @@ test('crossing UTC midnight clears both the count and the exhausted models', asy
     [],
     'a model spent yesterday is available again today',
   );
-  assert.equal(isAtCapacity(tomorrow), false);
+  assert.equal(await isAtCapacity(tomorrow), false);
 });
 
 // --- configuring the rotation -----------------------------------------------
@@ -368,4 +370,10 @@ test('nothing provider-specific rides along on the capacity signal', async () =>
       `"${forbidden}" must not ride along on AtCapacityError`,
     );
   }
+});
+// 6.1: the stores may hold a Redis socket open, which would keep this process
+// alive after the last test and hang the runner. Closing it is teardown, not
+// cleanup of state.
+after(async () => {
+  await closeRedis();
 });

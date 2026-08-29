@@ -75,7 +75,7 @@ export const chat = async (req, res) => {
   const userText = parsed.data.message;
 
   // Keyed on the authenticated user, never the IP.
-  const limit = checkRateLimit(ctx.userId);
+  const limit = await checkRateLimit(ctx.userId);
   if (!limit.allowed) {
     // The header is correct HTTP and stays for any non-browser client. It is
     // NOT how the panel learns the number: `cors()` sets no exposedHeaders, so
@@ -105,7 +105,7 @@ export const chat = async (req, res) => {
   // provider call, so running out of budget must not be able to suppress a
   // crisis response. Checked up front so the common case is one clean message
   // rather than a turn that dies partway through.
-  if (isAtCapacity()) {
+  if (await isAtCapacity()) {
     return sendFixedResponse(res, AT_CAPACITY_MESSAGE, 'at_capacity');
   }
 

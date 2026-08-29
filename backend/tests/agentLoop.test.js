@@ -1,6 +1,8 @@
 import { test, before, after, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
 
+import { closeRedis } from '../src/config/redis.js';
+
 import { connectDB, getDB } from '../src/config/mysql.js';
 import { runConversation, MAX_ITERATIONS } from '../src/assistant/agentLoop.js';
 import { resetBudget } from '../src/assistant/agentService.js';
@@ -46,10 +48,10 @@ const toolCallResponse = (calls) => ({
   text: async () => '',
 });
 
-const stubProvider = (queue) => {
+const stubProvider = async (queue) => {
   // The daily call counter is module state; without this it accumulates
   // across the suite and eventually trips the cap in an unrelated test.
-  resetBudget();
+  await resetBudget();
   requests = [];
   globalThis.fetch = async (url, options) => {
     requests.push(JSON.parse(options.body));
@@ -82,6 +84,7 @@ before(async () => {
 
 after(async () => {
   await db.end();
+  await closeRedis();
 });
 
 beforeEach(async () => {
@@ -106,7 +109,7 @@ const run = (userText) =>
   });
 
 test('a plain answer completes in one iteration with no tool calls', async () => {
-  stubProvider([textResponse('We open at 10am.')]);
+  await stubProvider([textResponse('We open at 10am.')]);
 
   const result = await run('What time do you open?');
 
@@ -117,7 +120,7 @@ test('a plain answer completes in one iteration with no tool calls', async () =>
 });
 
 test('a tool call executes, feeds the result back, and the answer follows', async () => {
-  stubProvider([
+  await stubProvider([
     toolCallResponse([['list_specialities', {}]]),
     textResponse('We have six specialities.'),
   ]);
@@ -146,7 +149,7 @@ test('a tool call executes, feeds the result back, and the answer follows', asyn
 
 test('invalid arguments are fed back and the model can correct itself', async () => {
   // The live model really does this: it invented `specialty` (US spelling).
-  stubProvider([
+  await stubProvider([
     toolCallResponse([['search_doctors', { specialty: 'Dermatologist' }]]),
     toolCallResponse([['search_doctors', { speciality: 'Dermatologist' }]]),
     textResponse('Found three dermatologists.'),
@@ -174,7 +177,7 @@ test('invalid arguments are fed back and the model can correct itself', async ()
 });
 
 test('a smuggled identity key is rejected exactly like a typo', async () => {
-  stubProvider([
+  await stubProvider([
     toolCallResponse([['my_appointments', { status: 'all', user_id: 999 }]]),
     textResponse('I can only show your own appointments.'),
   ]);
@@ -204,7 +207,7 @@ test('the iteration cap stops a model that never stops asking for tools', async 
 });
 
 test('several tool calls in one response all execute, in order', async () => {
-  stubProvider([
+  await stubProvider([
     toolCallResponse([
       ['list_specialities', {}],
       ['suggest_speciality', { term: 'rash' }],
@@ -228,7 +231,7 @@ test('several tool calls in one response all execute, in order', async () => {
 });
 
 test('a thrown audit failure aborts the turn and produces no text', async () => {
-  stubProvider([
+  await stubProvider([
     toolCallResponse([['list_specialities', {}]]),
     textResponse('should never be reached'),
   ]);
@@ -278,7 +281,7 @@ test('tool definitions carry no keywords the provider rejects', () => {
 });
 
 test('a multi-call response produces ONE assistant turn plus N tool results', async () => {
-  stubProvider([
+  await stubProvider([
     toolCallResponse([
       ['list_specialities', {}],
       ['suggest_speciality', { term: 'rash' }],

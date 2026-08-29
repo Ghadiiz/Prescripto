@@ -1,5 +1,7 @@
-import { test } from 'node:test';
+import { test, after } from 'node:test';
 import assert from 'node:assert/strict';
+
+import { closeRedis } from '../src/config/redis.js';
 
 import { toClientCard, CARD_TOOLS } from '../src/assistant/clientCards.js';
 import { tools } from '../src/assistant/tools/index.js';
@@ -189,4 +191,9 @@ test('a long result list is capped before it reaches the browser', () => {
   }));
 
   assert.equal(toClientCard('search_doctors', many).doctors.length, 10);
+});
+// 6.1: importing the tool registry reaches confirmations.js and so may open a
+// Redis socket. An open socket keeps this process alive after the last test.
+after(async () => {
+  await closeRedis();
 });

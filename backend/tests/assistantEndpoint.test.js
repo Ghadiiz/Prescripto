@@ -1,5 +1,7 @@
 import { test, before, after, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
+
+import { closeRedis } from '../src/config/redis.js';
 import express from 'express';
 import jwt from 'jsonwebtoken';
 
@@ -167,11 +169,12 @@ before(async () => {
 after(async () => {
   await new Promise((resolve) => server.close(resolve));
   await db.end();
+  await closeRedis();
 });
 
 const cleanup = async () => {
-  resetRateLimits();
-  resetBudget();
+  await resetRateLimits();
+  await resetBudget();
 
   // otherUserId() included deliberately: the rate-limit test signs a token for
   // a user id that does not exist, purely to show the limiter keys on the user
@@ -551,7 +554,7 @@ const exhaustBudget = async () => {
   await chat(tokenFor(patientId, 'patient'), {
     message: 'find me a dermatologist',
   });
-  assert.equal(getBudget().remaining, 0, 'precondition: the budget is spent');
+  assert.equal((await getBudget()).remaining, 0, 'precondition: the budget is spent');
 };
 
 test('at capacity the patient gets a friendly message, not an error', async () => {

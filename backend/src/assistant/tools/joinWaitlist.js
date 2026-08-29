@@ -123,7 +123,7 @@ export default {
     if (!args.confirmation_token) {
       return {
         status: 'confirmation_required',
-        confirmation_token: issueConfirmation(ctx, sessionId, args),
+        confirmation_token: await issueConfirmation(ctx, sessionId, args),
         summary,
         message:
           'Nothing has been recorded yet. Show the patient these details, ask ' +
@@ -133,7 +133,7 @@ export default {
 
     // --- phase two: the write ----------------------------------------------
 
-    if (!spendConfirmation(args.confirmation_token, ctx, sessionId, args)) {
+    if (!(await spendConfirmation(args.confirmation_token, ctx, sessionId, args))) {
       // Covers every failure the same way: unknown, expired, already spent,
       // issued to another patient or session, or issued for different dates.
       return refuse(

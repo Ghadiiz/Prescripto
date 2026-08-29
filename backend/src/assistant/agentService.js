@@ -1,5 +1,7 @@
 import dotenv from 'dotenv';
 
+import { KEY_PREFIX, withRedis } from '../config/redis.js';
+
 dotenv.config();
 
 // The ONLY file that knows which LLM provider is in use (CLAUDE.md).
@@ -118,10 +120,55 @@ const utcDay = (now) => new Date(now).toISOString().slice(0, 10);
 // Date-keyed rather than timer-driven. No setInterval to keep the process
 // alive or remember to unref, and "what happens at midnight" is testable by
 // passing `now` instead of waiting for it.
+//
+// The SAME key shape is used in Redis, so rollover there needs no timer
+// either: a new day is simply a new key, and the old one expires itself.
 const rollover = (now) => {
   const day = utcDay(now);
   if (budget.day !== day) budget = { day, calls: 0, exhausted: new Set() };
   return budget;
+};
+
+// Two days, so a key cannot outlive its usefulness but also cannot vanish
+// while the day it counts is still in progress in any timezone.
+const BUDGET_KEY_TTL_SECONDS = 2 * 24 * 60 * 60;
+
+const budgetKeys = (day) => ({
+  calls: `${KEY_PREFIX}budget:${day}:calls`,
+  exhausted: `${KEY_PREFIX}budget:${day}:exhausted`,
+});
+
+// Redis when healthy, the in-memory counter otherwise.
+//
+// Falling back rather than failing closed is deliberate, and it is the same
+// call rateLimit.js makes: this cap protects a free-tier COST, and the cost of
+// being wrong is bounded by the cap itself. Refusing to serve because Redis
+// blinked would turn a spending guard into an outage. confirmations.js is the
+// one place that fails closed, because what it guards is a write.
+const readBudget = async (now) => {
+  const day = utcDay(now);
+
+  const { state, value } = await withRedis(async (redis) => {
+    const keys = budgetKeys(day);
+    const [calls, exhausted] = await Promise.all([
+      redis.get(keys.calls),
+      redis.smembers(keys.exhausted),
+    ]);
+
+    return { calls: Number(calls ?? 0), exhausted: new Set(exhausted) };
+  });
+
+  if (state === 'healthy') {
+    return { day, calls: value.calls, exhausted: value.exhausted, store: 'redis' };
+  }
+
+  const current = rollover(now);
+  return {
+    day: current.day,
+    calls: current.calls,
+    exhausted: current.exhausted,
+    store: 'memory',
+  };
 };
 
 // The neutral "stop asking" signal. A distinct class so callers can use
@@ -134,26 +181,33 @@ export class AtCapacityError extends Error {
   }
 }
 
-// Exported for tests; also what 6.1 replaces with a Redis-backed reset.
-export const resetBudget = () => {
+// Exported for tests. Clears BOTH stores, so a suite that switches REDIS_URL
+// between cases cannot leak a count from one into the other.
+export const resetBudget = async () => {
   budget = { day: null, calls: 0, exhausted: new Set() };
+
+  await withRedis(async (redis) => {
+    const keys = await redis.keys(`${KEY_PREFIX}budget:*`);
+    if (keys.length) await redis.del(...keys);
+  });
 };
 
-export const getBudget = (now = Date.now()) => {
-  const current = rollover(now);
+export const getBudget = async (now = Date.now()) => {
+  const current = await readBudget(now);
 
   return {
     day: current.day,
     callsToday: current.calls,
     remaining: Math.max(0, dailyCallCap() - current.calls),
     exhaustedModels: [...current.exhausted],
+    store: current.store,
   };
 };
 
 // Checked by the endpoint BEFORE a turn starts, so the common case is one
 // clean message rather than a turn that dies partway through.
-export const isAtCapacity = (now = Date.now()) => {
-  const current = rollover(now);
+export const isAtCapacity = async (now = Date.now()) => {
+  const current = await readBudget(now);
 
   return (
     current.calls >= dailyCallCap() ||
@@ -164,8 +218,8 @@ export const isAtCapacity = (now = Date.now()) => {
 // The next model worth trying. Sticky: a model already known spent today is
 // skipped rather than re-probed, so the next turn does not pay a call to
 // rediscover the same 429.
-const pickModel = (now = Date.now()) => {
-  const current = rollover(now);
+const pickModel = async (now = Date.now()) => {
+  const current = await readBudget(now);
 
   if (current.calls >= dailyCallCap()) throw new AtCapacityError();
 
@@ -177,12 +231,30 @@ const pickModel = (now = Date.now()) => {
 
 // Counts ACTUAL provider calls, including retries — one user turn is several.
 // A retry is a real request against Google's quota, so it counts.
-const noteCall = (now = Date.now()) => {
+//
+// The in-memory counter is incremented WHETHER OR NOT Redis took the write.
+// It costs one integer and it means a mid-day Redis failure falls back to a
+// count this process actually kept, rather than to zero.
+const noteCall = async (now = Date.now()) => {
   rollover(now).calls += 1;
+
+  await withRedis(async (redis) => {
+    const keys = budgetKeys(utcDay(now));
+    await redis.incr(keys.calls);
+    // Set every time rather than only on creation: cheap, and it cannot leave
+    // a key without a TTL if the INCR that created it raced something.
+    await redis.expire(keys.calls, BUDGET_KEY_TTL_SECONDS);
+  });
 };
 
-const markExhausted = (model, now = Date.now()) => {
+const markExhausted = async (model, now = Date.now()) => {
   rollover(now).exhausted.add(model);
+
+  await withRedis(async (redis) => {
+    const keys = budgetKeys(utcDay(now));
+    await redis.sadd(keys.exhausted, model);
+    await redis.expire(keys.exhausted, BUDGET_KEY_TTL_SECONDS);
+  });
 };
 
 // Google returns 429 for BOTH the per-minute rate limit and the per-day quota,
@@ -365,10 +437,10 @@ export const generate = async ({
   while (attempt < MAX_ATTEMPTS) {
     // Throws AtCapacityError when the cap is reached or every model is spent,
     // before spending a request to find out.
-    const model = pickModel();
+    const model = await pickModel();
     let response;
 
-    noteCall();
+    await noteCall();
 
     try {
       response = await fetch(`${API_BASE}/models/${model}:generateContent`, {
@@ -401,7 +473,7 @@ export const generate = async ({
     // This model is done for the day. Switch and do NOT sleep — there is
     // nothing to wait for, and the lag would be pure loss.
     if (response.status === 429 && isDailyQuotaError(rawBody)) {
-      markExhausted(model);
+      await markExhausted(model);
       continue;
     }
 
@@ -451,9 +523,9 @@ export async function* generateStream({
   let attempt = 0;
 
   while (true) {
-    const model = pickModel();
+    const model = await pickModel();
 
-    noteCall();
+    await noteCall();
 
     try {
       response = await fetch(
@@ -479,7 +551,7 @@ export async function* generateStream({
     const rawBody = await response.text().catch(() => '');
 
     if (response.status === 429 && isDailyQuotaError(rawBody)) {
-      markExhausted(model);
+      await markExhausted(model);
       continue;
     }
 
