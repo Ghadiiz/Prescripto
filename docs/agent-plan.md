@@ -1300,17 +1300,54 @@ Each of these maps to an explicit line on the target job description.
       - CI's lint job now covers four packages, installing the Node ones with
         `npm ci --ignore-scripts` — linting needs eslint and source, not a
         compiled `bcrypt`.
-- [ ] **6.8** Frontend test runner — Vitest + React Testing Library, for
+- [x] **6.8** Frontend test runner — Vitest + React Testing Library, for
       `frontend/` and `admin/`.
-      - The missing prerequisite for 6.9. Both apps have **no test tooling at
+      - The missing prerequisite for 6.9. Both apps had **no test tooling at
         all**, which is why 6.4 could only ratchet their lint errors rather
         than fix them.
+      - **Vitest 4 + RTL 16**, jsdom, and `globals: false` — tests import
+        `describe`/`it`/`expect` explicitly, the same habit as the backend
+        importing from `node:test`. Routing is REAL (`MemoryRouter` and real
+        `Routes`), so `useParams`/`useSearchParams` behave as in a browser;
+        only `axios` and `react-toastify` are stubbed.
+      - **36 characterisation tests covering 6.9's targets exactly**:
+        `RelatedDoctors` (7), `Doctors` (6), `VerifyEmail` (5), frontend
+        `AppContext` (5), `MyProfile` (5), admin `EditDoctor` (4), and the
+        three admin context providers (4).
+      - **Written against CURRENT behaviour, before the refactor**, which is
+        the whole point: tests authored alongside a fix are shaped by the new
+        implementation and cannot police it.
+      - **Observable output only.** No test names internal state or counts
+        renders — the `set-state-in-effect` fix typically deletes the state in
+        favour of computing during render, so a test naming `relDoc` would have
+        to be rewritten by the very increment it exists to check.
+      - Mutation-tested 6/6: removing the `docId` exclusion, ignoring the search
+        box, skipping the mount fetch in `VerifyEmail` or `AppContext`, not
+        populating `EditDoctor`'s form, and dropping `MyProfile`'s re-split each
+        fail their tests.
+      - *Two corrections while writing them, both the TEST being wrong about the
+        component rather than the reverse:* `getByRole('combobox')` was
+        ambiguous in `MyProfile` (edit mode also renders a gender select), and
+        `EditDoctor` reads `doctorOptions.specialities` with no guard, so the
+        stub needed the real shape. Worth distinguishing — a characterisation
+        test "fixed" by changing the component would defeat its purpose.
 - [ ] **6.9** Clear the remaining 11 frontend/admin lint errors — 6
       `set-state-in-effect`, 4 `only-export-components`, 1 `immutability` — and
       lower the ratchet baseline to zero.
       - **After 6.8, not before.** These change when state updates run and
         which module a context is imported from; fixing effect behaviour before
         the tests that would catch a regression exist is backwards.
+      - **THE CONTRACT: 6.8's 36 characterisation tests must pass UNEDITED.**
+        They assert observable output only, so a correct refactor — effect to
+        `useMemo`, context export relocated — changes none of them. If one
+        needs changing, that is a BEHAVIOUR CHANGE to report and discuss, not
+        to absorb by adjusting the test. Editing the net to fit the refactor
+        would leave no evidence the behaviour held, which is the only thing
+        6.8 was built to provide.
+      - The 4 `only-export-components` fixes move each `createContext()` export
+        into its own module, changing the import path in **35 consumer files**
+        (13 + 11 + 8 + 3). The context tests pin provider/consumer pairing so a
+        half-applied move fails rather than silently yielding `undefined`.
 
 - [ ] **6.10** Parameterised-query lint rule: allowlist the known-safe
       interpolation patterns and flag dangerous value interpolation.
