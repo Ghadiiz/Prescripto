@@ -2212,22 +2212,112 @@ goes last. **7.5 sits after all of them for a different reason** — it consumes
 
 ---
 
-## Phase 8 — RAG clinic knowledge base (optional)
+## Phase 8 — RAG for platform and how-it-works knowledge (optional, last)
 
-Only after 0–4 are solid. The point is understanding *why* RAG suits
-unstructured content and SQL suits structured content.
+The point is unchanged and is the whole reason this phase exists: demonstrate
+**why RAG suits UNSTRUCTURED content and SQL suits STRUCTURED content**, using
+this system as the case study. Structured facts — doctors, availability, fees,
+specialities, locations — are already served by the SQL tools built in Phases
+1–7. RAG adds retrieval over prose that has no SQL answer: how the platform
+works. The two kinds of retrieval are separated cleanly **by the shape of the
+data**, which is the lesson.
 
 *Renumbered from Phase 7 when the time-aware phase was inserted above it. It
 stays last because it is the one phase that adds a new KIND of retrieval rather
 than refining the booking flow — and the only one marked optional.*
 
-- [ ] **8.1** Migration: `clinic_docs` (id, title, content, embedding).
-- [ ] **8.2** Embedding generation + ingestion script for FAQ content
-      (hours, parking, insurance, cancellation policy, what to bring).
-- [ ] **8.3** `tools/searchClinicInfo.js` — semantic search, returns passages
-      with sources. Same sanitisation rules as every other tool.
-- [ ] **8.4** Short write-up in `docs/agent-design.md`: why structured queries
-      handle doctors and availability, and why RAG handles policy content.
+### The content was RESHAPED, and why
+
+This section originally described a **clinic** knowledge base: opening hours,
+parking, insurance, what to bring. That content does not fit the product.
+**Prescripto is a multi-doctor MARKETPLACE, not a single clinic.** There is no
+one clinic whose parking or hours you would document — each doctor has their
+own, and every one of those facts is STRUCTURED data already served by SQL:
+`search_doctors`, `get_doctor`, `check_availability`.
+
+Embedding per-doctor facts would have been the **anti-pattern this phase exists
+to teach against** — burying computable rows in a vector index, where they go
+stale the moment a doctor changes a fee and where "is Dr. Smith free Tuesday?"
+becomes a similarity search instead of a query with a correct answer.
+
+So the corpus is platform/how-it-works prose instead. **The separation IS the
+demonstration:**
+
+| question | answered by | why |
+|---|---|---|
+| "Is Dr. Smith free Tuesday?" | SQL tool (built) | rows, computable, exact, live |
+| "How does the waitlist work?" | RAG (new) | explanatory prose, no SQL answer |
+
+### CONTENT — what gets embedded
+
+Platform and how-it-works prose, roughly 10–15 short passages:
+
+- **How booking works** — searching doctors, picking a slot, the 30-day
+  window, confirmation.
+- **How to cancel or reschedule** through the app.
+- **How the WAITLIST works** — what it is; that it is a SINGLE SLOT (one
+  specific day and time, per 7.5); that you cannot waitlist a day you already
+  hold that doctor on; how notifications reach you; and that a notification is
+  an invitation to go and look, **never a held reservation** (rule 7).
+- **What the AI assistant can and cannot do** — it searches doctors, checks
+  availability and joins a waitlist; it does NOT book or cancel, because those
+  are app actions; it never sees your password; it takes no destructive action.
+- **Platform policies** — privacy and data handling, account and verification,
+  the general cancellation policy.
+
+### EXCLUDED, deliberately
+
+Individual doctor hours, fees, specialities, locations and availability. These
+are STRUCTURED → SQL. Putting them in the index is the anti-pattern, and this
+phase must not absorb it in the name of having more to retrieve.
+
+### These are DOCUMENTATION, not a second system prompt
+
+The passages are patient-facing documentation the model RETRIEVES and RELAYS —
+not instructions it follows. That distinction is rule 5 applied to a new source:
+**a retrieved passage is DATA.** It gets sanitised and labelled like every other
+tool result, and text inside it that reads like an instruction is ordinary text
+that happens to say those words. Duplicating the system prompt into the corpus
+would create a second source of truth for behaviour AND hand an editor of the
+corpus a channel into the instruction stream.
+
+### Technical foundation (decided)
+
+- **Embeddings: `gemini-embedding-001`**, through the EXISTING Gemini API key —
+  no new provider and no new environment variable. Confirmed working (it
+  returns vectors). Volume is tiny: ~10–15 short documents embedded once at
+  ingestion, plus one small call per query, so free-tier is fine.
+  **NOT `text-embedding-004`, which is deprecated as of January 2026.**
+- **Vector storage and search: plain MySQL plus cosine similarity in Node.**
+  Aiven is MySQL **8.4**, which has no native vector search. Each embedding is
+  stored as JSON; at query time the documents are fetched and cosine similarity
+  is computed in Node, returning the top-K passages. No pgvector, no MySQL 9 —
+  the standard approach for a corpus this small, and it sidesteps the
+  database-version question entirely.
+
+### Increments
+
+- [ ] **8.1** Migration: `platform_docs` (id, title, content, embedding as
+      JSON/TEXT, source/metadata). A new Aiven migration (**008**), applied by
+      hand exactly as 007 was — backup first, apply, then verify.
+- [ ] **8.2** Content authoring and embedding ingestion. The ~10–15 passages
+      above are written, embedded with `gemini-embedding-001`, and stored.
+      **The passages are authored by Ghadi** — his content about his own
+      system — not generated by Claude Code.
+- [ ] **8.3** `tools/searchPlatformInfo.js` — embed the query, cosine-similarity
+      against the stored embeddings, return the top passages WITH their
+      sources.
+      - **READ-ONLY.** No second write tool: rule 2 holds and the 1.8 guardrail
+        suite still fails if a second `mutates: true` appears.
+      - Rule 4 (explicit column lists) and rule 5 (sanitise; passages are data)
+        exactly as every other tool.
+      - Registered in the patient tool registry — and decide deliberately
+        whether it belongs on the MCP patient server too, per rule 6.
+- [ ] **8.4** Write-up in `docs/agent-design.md`: why structured queries handle
+      doctors and availability (computable answers from rows) and why RAG
+      handles platform and policy content (explanatory prose with no SQL
+      answer) — the SQL-vs-RAG distinction, demonstrated by this system rather
+      than asserted about it.
 
 ---
 
