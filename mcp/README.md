@@ -11,7 +11,7 @@ even though both signatures are perfectly valid.
 | | Patient | Doctor |
 |---|---|---|
 | Script | `patient-server.js` | `doctor-server.js` |
-| Tools | `search_doctors`, `get_doctor`, `list_specialities`, `check_availability`, `suggest_speciality`, `my_appointments` | `my_schedule`, `schedule_gaps`, `patients_needing_followup`, `my_stats` |
+| Tools | `search_doctors`, `get_doctor`, `list_specialities`, `check_availability`, `suggest_speciality`, `my_appointments`, `search_platform_info` | `my_schedule`, `schedule_gaps`, `patients_needing_followup`, `my_stats` |
 | Token file variable | `PRESCRIPTO_TOKEN_FILE` | `PRESCRIPTO_DOCTOR_TOKEN_FILE` |
 | Identity | one patient | one doctor |
 | Transport | stdio — the host launches it as a subprocess | same |
@@ -210,14 +210,20 @@ reload the config — the app keeps running in the background and your new serve
 will not appear. Right-click the Claude icon in the system tray (bottom-right,
 possibly under the `^` overflow arrow) and choose **Quit**. Then reopen it.
 
-The server appears as `prescripto-patient` with six tools. Try:
+The server appears as `prescripto-patient` with seven tools. Try:
 
 > Which dermatologists do you have in Khalda?
 
 > What appointments do I have coming up?
 
+> How does the waitlist work?
+
 The second is the interesting one: it returns **your** appointments, because
 identity comes from the token file and cannot be set by the conversation.
+
+The third goes through `search_platform_info`, which answers from the platform
+help documentation rather than from rows — and returns nothing at all when the
+documentation does not cover the question, instead of guessing.
 
 ### The permission prompt is expected
 

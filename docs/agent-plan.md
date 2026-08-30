@@ -409,6 +409,26 @@ not lost; none blocks the current phase.
   routine happy-path cases. Decide before starting 2.9 whether to enable
   billing instead. *Found during 2.2.*
 
+- **No way to keep a read-only tool OFF the MCP patient server, and 8.3
+  decided not to build one.** `readOnlyTools` is every `mutates: false` tool,
+  so registering a read tool exposes it over MCP automatically. There is no
+  opt-out.
+
+  The standing preference is to keep the MCP surface minimal, since that
+  surface is a security boundary. The reality for `search_platform_info` is
+  that it is harmless there — read-only, no patient data (the passages are
+  public help text committed to this repo), and rule 5 already treats what it
+  returns as data rather than instructions. So the mechanism that would
+  reconcile the two (`mcpExposed: false` on the descriptor, honoured by
+  `readOnlyTools`, plus a guardrail test pinning exactly which tools reach
+  MCP) was **declined as work that buys only tidiness**.
+
+  What makes it worth building: the first read-only tool that genuinely should
+  not be on MCP. Until then the gap is that "read-only" and "safe for a host
+  model to call" are being treated as the same property, and they are not the
+  same property — they merely coincide today. Anyone adding a read tool should
+  check that coincidence still holds rather than assume it. *Decided in 8.3.*
+
 ---
 
 ## Phase 0 — Database and seed data
@@ -2570,21 +2590,44 @@ corpus a channel into the instruction stream.
       widest possible result is more help-centre prose, and no patient data is
       reachable through this tool at all.
 
-      **Recorded against that: the owner's lean is web-app-only** — low value
-      to a host model, and keeping the MCP surface small is a good instinct
-      when the surface is the security boundary. That is a defensible call and
-      it is NOT what the code does today, so it is written down here rather
-      than quietly resolved either way. Making it true needs a real change:
-      an opt-out on the descriptor (say `mcpExposed: false`) honoured by
-      `readOnlyTools`, plus a guardrail test pinning which tools reach MCP so
-      the next read-only tool is a deliberate choice rather than a default.
-      That is a follow-up increment, not a finalize-step edit.
+      **SETTLED: it stays on MCP, and the opt-out is declined.** The instinct
+      that pulled the other way is a good one — keep the MCP surface minimal,
+      because that surface is a security boundary — and it was weighed rather
+      than waved through. It loses here on the specifics: this tool is
+      read-only, carries no patient data (the passages are public help text
+      committed to this repo), and rule 5 already treats what it returns as
+      data rather than instructions. There is nothing to keep off the boundary.
 
-      **Consequence to fix with that decision, either way:** the patient server
-      now registers SEVEN read-only tools, so `patient-server.js`'s "Six
-      registrations" comment and `mcp/README.md`'s "six tools" are stale. They
-      are correct again if the tool becomes web-only, and need updating if it
-      stays — which is why they were left untouched here rather than guessed at.
+      Building the alternative — `mcpExposed: false` on the descriptor,
+      honoured by `readOnlyTools`, plus a guardrail test pinning exactly which
+      tools reach MCP — is real work with its own tests and its own failure
+      modes, and it would buy tidiness on a tool that is harmless there.
+      DEFERRED, deliberately and on the record, not forgotten. The moment a
+      read-only tool exists that should NOT be on MCP, that mechanism becomes
+      worth building and this note is the argument for it.
+
+      Consequence handled: the patient server registers SEVEN read-only tools
+      now, so `patient-server.js` and `mcp/README.md` were corrected — the
+      server comment no longer hardcodes a count at all, since the loop
+      registers whatever the registry holds and a number there just goes stale
+      again on the next tool.
+
+      **A THIRD stale count was a real build break, not a comment.**
+      `mcp/smoke.mjs` asserted `toolsList.count === 6`, so registering the
+      seventh tool made the MCP smoke FAIL — and CI runs the smokes, so the
+      8.3 commit went in red. Every individual check inside the smoke passed;
+      only the transcribed number disagreed. Fixed by deriving the expectation
+      from `readOnlyTools.length`, which is what the check was always trying to
+      say: everything read-only reaches MCP and no write tool does. Both smokes
+      PASS again.
+
+      Worth the note because the three sites failed differently: a comment that
+      merely misleads, a README that misinforms a user setting the server up,
+      and an assertion that stops the build. **The lesson is not "grep for
+      numbers" — it is that a count transcribed from a registry into anywhere
+      else is a duplicate of the registry**, and this increment left one of the
+      three still transcribed only because the README's job is to be read by a
+      human rather than executed.
 
       **THE GUARDRAIL SUITE STAYS OFFLINE, and that shaped the design.** The
       first version of this increment gave `guardrails.test.js` a real query

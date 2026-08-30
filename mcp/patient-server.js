@@ -61,9 +61,12 @@ export const createServer = () => {
   //
   // Phase 1 claimed that tools calling the service layer directly, with
   // identity from ctx, would make a second transport a matter of writing a
-  // server rather than rewriting tools. Six registrations with no adapter, no
-  // schema conversion and no per-tool special casing is what that claim looks
-  // like when it holds.
+  // server rather than rewriting tools. Registering EVERY read-only tool with
+  // no adapter, no schema conversion and no per-tool special casing is what
+  // that claim looks like when it holds — and the loop keeps holding it as the
+  // registry grows, which is why this no longer names a count. 8.3's
+  // search_platform_info arrived here without a line of code changing, taking
+  // the patient server from six tools to seven.
   //
   // `tool.schema` is passed straight through. mcp/ and backend/ have separate
   // zod copies — verified NOT the same instance — but the SDK types against

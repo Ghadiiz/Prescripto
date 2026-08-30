@@ -38,6 +38,10 @@ import {
   deleteEvalPatient,
   twoPatientsFixture,
 } from '../backend/evals/harness.js';
+// The registry itself, so the expected tool list is derived rather than
+// transcribed. This smoke checks what the SERVER exposes over the wire; the
+// registry is what it should equal.
+import { readOnlyTools } from '../backend/src/assistant/tools/index.js';
 
 const results = {};
 const scratch = mkdtempSync(join(tmpdir(), 'prescripto-mcp-'));
@@ -226,7 +230,12 @@ passed =
   results.stdoutPurity.verdict === 'CLEAN' &&
   results.childAuth.authenticatedAsPatient &&
   results.childAuth.registered &&
-  results.toolsList.count === 6 &&
+  // Derived from the registry, not hardcoded. The previous `=== 6` broke the
+  // moment 8.3 registered a seventh read-only tool — a count written down in
+  // one place and changed in another. What this check is actually for is that
+  // every read-only tool reaches MCP and no write tool does, and comparing
+  // against readOnlyTools says exactly that without going stale again.
+  results.toolsList.count === readOnlyTools.length &&
   results.toolsList.writeToolExposed === false &&
   results.toolsList.allHaveSchemas &&
   results.listSpecialities.count === 6 &&
