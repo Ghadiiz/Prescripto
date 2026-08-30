@@ -104,6 +104,19 @@ const run = async () => {
   await connectDB();
   const db = getDB();
 
+  // WHICH DATABASE THIS IS WRITING TO.
+  //
+  // 8.2 confirmed a production run had reached Aiven by reading the counts:
+  // the local table already held twelve rows, so "to embed: 12" could only
+  // mean an empty remote one. That was a TIMING COINCIDENCE, not a safeguard —
+  // now that both databases are populated the counts look identical either
+  // way, and the only thing distinguishing them is this line.
+  console.log(
+    `\nConnected to ${process.env.DB_HOST}:${process.env.DB_PORT || 3306}` +
+      ` / ${process.env.DB_NAME}` +
+      `${process.env.DB_SSL === 'true' ? ' (SSL)' : ''}`,
+  );
+
   const [existingRows] = await db.query(
     'SELECT slug, title, content, embedding_model, embedding_dim FROM platform_docs',
   );

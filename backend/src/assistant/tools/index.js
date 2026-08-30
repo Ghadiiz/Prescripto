@@ -19,6 +19,7 @@ import listSpecialities from './listSpecialities.js';
 import checkAvailability from './checkAvailability.js';
 import suggestSpeciality from './suggestSpeciality.js';
 import myAppointments from './myAppointments.js';
+import searchPlatformInfo from './searchPlatformInfo.js';
 import joinWaitlist from './joinWaitlist.js';
 
 export const tools = [
@@ -28,6 +29,12 @@ export const tools = [
   checkAvailability,
   suggestSpeciality,
   myAppointments,
+  // The only tool that answers from PROSE rather than rows (Phase 8). Every
+  // one above computes an answer from the database; this one retrieves an
+  // explanation someone wrote, for questions that have no SQL answer. Keeping
+  // both kinds in one registry is deliberate — the model should pick by what
+  // the question needs, not by which system it lives in.
+  searchPlatformInfo,
   // THE ONLY WRITE TOOL (rule 2's single exception). Everything above is
   // read-only. Adding another `mutates: true` tool here means changing rule 2,
   // and the 1.8 guardrail suite will fail until someone does so deliberately.

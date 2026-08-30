@@ -1,10 +1,13 @@
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 
 import { closeRedis } from '../src/config/redis.js';
 
 import { connectDB, getDB } from '../src/config/mysql.js';
 import { tools, readOnlyTools, getTool } from '../src/assistant/tools/index.js';
+import { retrieveWith } from '../src/assistant/tools/searchPlatformInfo.js';
+import { EMBEDDING_MODEL, EMBEDDING_DIM } from '../src/assistant/embeddings.js';
 import { doctorTools } from '../src/assistant/doctorTools/index.js';
 import { runTool } from '../src/assistant/runTool.js';
 import { listSpecialityKeywords } from '../src/assistant/models/specialityQueries.js';
@@ -42,8 +45,37 @@ const BANNED_RESULT_FIELDS = [
   'reset_password_token',
 ];
 
+// Tools whose fixture must produce actual data, because for these an empty
+// result is a mistake in the fixture rather than a valid answer.
+const MUST_RETURN_SOMETHING = ['search_doctors', 'search_platform_info'];
+
+// A REAL query embedding and REAL passage vectors, captured once from the real
+// model (see the fixture's own _readme). This suite must run with no provider
+// key: CI deliberately holds only a fake GEMINI_API_KEY and nothing in
+// `npm test` reaches the real Gemini (6.4), and a guardrail that needed a real
+// key would either fail in CI or have to be skipped there.
+//
+// A captured vector is NOT a stub. The numbers came out of the real model, so
+// the retrieval they drive is the real ranking over real passages producing a
+// real tool result — which is the thing this suite scans. The only step not
+// exercised is turning a question into a vector, and that step returns floats,
+// not patient data. The full handler, embedding call included, is covered by
+// the opt-in LIVE tests in searchPlatformInfo.test.js.
+const retrievalFixture = JSON.parse(
+  readFileSync(new URL('./fixtures/platformRetrieval.json', import.meta.url)),
+);
+
 const TEST_SESSION_ID = 'ffffffff-1111-2222-3333-444444444444';
 const TEST_EMAIL_PREFIX = 'guardrail-test-';
+const FIXTURE_SLUG_PREFIX = 'guardrail-fixture-';
+
+// How this suite obtains a result for tools that would otherwise need a
+// provider call. Everything else goes through its handler unchanged.
+const OFFLINE_RESULT = {
+  // The real retrieval path — database read, ranking, sanitising, result
+  // shaping — driven by the captured query vector instead of a live embed.
+  search_platform_info: () => retrieveWith(retrievalFixture.queryEmbedding),
+};
 
 let db;
 let ctx;
@@ -64,7 +96,8 @@ const countRows = async () => {
        (SELECT COUNT(*) FROM doctors) doctors,
        (SELECT COUNT(*) FROM users) users,
        (SELECT COUNT(*) FROM appointments) appointments,
-       (SELECT COUNT(*) FROM assistant_audit_log) audit`,
+       (SELECT COUNT(*) FROM assistant_audit_log) audit,
+       (SELECT COUNT(*) FROM platform_docs) docs`,
   );
   return row;
 };
@@ -122,6 +155,18 @@ before(async () => {
     check_availability: { doctor_id: doctor.id, date: tomorrow() },
     suggest_speciality: { term: 'rash' },
     my_appointments: { status: 'all' },
+    // 8.3. A MISSING entry is caught by the coverage assertion below, so the
+    // trap here is a different one: a query the corpus cannot answer returns
+    // an empty array, and scanning an empty array passes while examining
+    // nothing. Mutating this to "what is the capital of France?" was confirmed
+    // to pass 11/11 — the same hollow shape 7.5 found in join_waitlist's
+    // fixture, reached by a different route. MUST_RETURN_SOMETHING closes it.
+    //
+    // These args are NOT passed to the handler: this tool is driven through
+    // OFFLINE_RESULT below so the suite needs no provider key. The query is
+    // still recorded here, and asserted to match the captured vector, so the
+    // two cannot drift apart silently.
+    search_platform_info: { query: retrievalFixture.query },
     // The write tool, called in its PREVIEW phase — no confirmation_token, so
     // it returns the summary and writes nothing. That is the right call here:
     // this suite asserts no tool result carries a banned field, and the
@@ -142,6 +187,31 @@ before(async () => {
       time_to: WAITLIST_SLOT,
     },
   };
+
+  // The corpus this suite retrieves from, inserted rather than assumed. A
+  // fresh CI database has `platform_docs` created by migration 008 and EMPTY —
+  // `npm run ingest:docs` is a manual step needing a real key, so it never
+  // runs there. Without these rows the retrieval would return nothing and the
+  // guardrail would be scanning an empty array again.
+  //
+  // Prefixed slugs, because the same passages exist under their real slugs on
+  // a developer machine where the corpus IS ingested and `slug` is UNIQUE.
+  for (const passage of retrievalFixture.passages) {
+    await db.query(
+      `INSERT INTO platform_docs
+         (slug, title, content, source, embedding, embedding_model, embedding_dim)
+       VALUES (?, ?, ?, ?, CAST(? AS JSON), ?, ?)`,
+      [
+        `${FIXTURE_SLUG_PREFIX}${passage.slug}`,
+        passage.title,
+        passage.content,
+        passage.source,
+        JSON.stringify(passage.embedding),
+        passage.embedding_model,
+        passage.embedding_dim,
+      ],
+    );
+  }
 
   // Occupy the slot so the preview is reachable. Booked by the injection
   // doctor's own throwaway patient, never by the ctx patient — a same-day
@@ -176,6 +246,9 @@ after(async () => {
   if (slotHolderId) {
     await db.query('DELETE FROM users WHERE id = ?', [slotHolderId]);
   }
+  await db.query('DELETE FROM platform_docs WHERE slug LIKE ?', [
+    `${FIXTURE_SLUG_PREFIX}%`,
+  ]);
   await db.end();
   await closeRedis();
 });
@@ -239,8 +312,21 @@ test('rule 4: no tool result contains a banned field', async () => {
   );
 
   for (const tool of tools) {
-    const result = await tool.handler(ctx, TOOL_ARGS[tool.name]);
+    const result = OFFLINE_RESULT[tool.name]
+      ? await OFFLINE_RESULT[tool.name]()
+      : await tool.handler(ctx, TOOL_ARGS[tool.name]);
     const keys = collectKeys(result);
+
+    // Scanning an empty result proves nothing. Not every tool can be held to
+    // this — my_appointments legitimately returns [] for a patient with no
+    // appointments — so it is an opt-in list rather than a blanket rule.
+    if (MUST_RETURN_SOMETHING.includes(tool.name)) {
+      assert.ok(
+        keys.size > 0,
+        `${tool.name} returned an empty result, so the banned-field scan ` +
+          'examined nothing. Give it arguments that produce real data.',
+      );
+    }
 
     for (const banned of BANNED_RESULT_FIELDS) {
       assert.ok(
@@ -249,6 +335,45 @@ test('rule 4: no tool result contains a banned field', async () => {
       );
     }
   }
+});
+
+test('the retrieval fixture matches the model the code uses today', () => {
+  // A fixture captured under a different model or dimension is not comparable
+  // with the corpus, and rankPassages would exclude every row — which the
+  // banned-field test would then catch as an empty result. This fails first
+  // and says why, so the answer is "regenerate the fixture" rather than a hunt
+  // through the ranking code.
+  assert.equal(
+    retrievalFixture.model,
+    EMBEDDING_MODEL,
+    'the captured vectors are from a different model — regenerate the fixture',
+  );
+  assert.equal(retrievalFixture.dim, EMBEDDING_DIM);
+  assert.equal(retrievalFixture.queryEmbedding.length, EMBEDDING_DIM);
+
+  // The recorded question and the captured vector must describe each other.
+  assert.equal(TOOL_ARGS.search_platform_info.query, retrievalFixture.query);
+
+  // Captured from a normalised source, which is what makes 8.3's dot product
+  // a cosine. A fixture that lost normalisation would rank by magnitude.
+  const magnitude = Math.sqrt(
+    retrievalFixture.queryEmbedding.reduce((sum, x) => sum + x * x, 0),
+  );
+  assert.ok(Math.abs(magnitude - 1) < 1e-6, `fixture not unit-length: ${magnitude}`);
+});
+
+test('this suite reaches no provider, so CI needs no real key', () => {
+  // 6.4 established that CI holds no real credentials and spends no quota.
+  // The retrieval guardrail is driven by a captured vector precisely so that
+  // stays true; this asserts the arrangement rather than trusting it.
+  assert.ok(
+    OFFLINE_RESULT.search_platform_info,
+    'search_platform_info must be driven offline, not through embedQuery',
+  );
+
+  // Nothing here may depend on a usable key. The suite runs with whatever is
+  // in the environment — including nothing at all.
+  assert.doesNotThrow(() => retrievalFixture.queryEmbedding.length);
 });
 
 test('rule 2: join_waitlist is the ONLY write tool', () => {

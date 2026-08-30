@@ -2503,7 +2503,7 @@ corpus a channel into the instruction stream.
          coincidence, not a safeguard**. Once both databases are populated the
          output looks identical either way. The script should say which host it
          connected to.
-- [ ] **8.3** `tools/searchPlatformInfo.js` — embed the query, cosine-similarity
+- [x] **8.3** `tools/searchPlatformInfo.js` — embed the query, cosine-similarity
       against the stored embeddings, return the top passages WITH their
       sources.
       - **READ-ONLY.** No second write tool: rule 2 holds and the 1.8 guardrail
@@ -2512,6 +2512,158 @@ corpus a channel into the instruction stream.
         exactly as every other tool.
       - Registered in the patient tool registry — and decide deliberately
         whether it belongs on the MCP patient server too, per rule 6.
+
+      **A DOT PRODUCT, not a cosine formula** — and that is only correct
+      because 8.2 normalised at write time. Every stored vector measures
+      `|v| = 1.000000000` and `embedQuery` normalises too, so the dot product
+      *is* the cosine. The shortcut is silently wrong the moment either side
+      stops normalising: it would not throw and would not look wrong, it would
+      just rank by magnitude as much as by meaning. That is why the mutation
+      for it lives in `embeddings.test.js` — 8.2's suite already asserts unit
+      length on both sides and names this tool as the reason — rather than
+      being re-asserted here.
+
+      **`MIN_SIMILARITY = 0.62`**, taking 8.2's inheritance (1) literally: it
+      sits in the measured gap with 0.048 of headroom below the weakest real
+      answer and 0.027 above the strongest false one. The asymmetry is
+      deliberate — refusing a question we *can* answer is worse than returning
+      a weak passage the model can judge for itself, and it sees the score. The
+      constant is commented as **tuned to this corpus, re-check when the corpus
+      changes**, not as a property of the model. **Top 3 above the floor**, per
+      inheritance (2).
+
+      **Returning an ARRAY, deliberately.** `runTool`'s `countResults` gives an
+      array its length and any object a flat 1, so the audit row records *how
+      many passages answered* — and a `0` in `assistant_audit_log` becomes a
+      real signal that the corpus does not cover something patients are asking
+      about. An object would log `1` whether it found three passages or none,
+      which is rule 8 recording a number that means nothing.
+
+      **The corpus-unusable case returns empty too, and logs.** If every row
+      was embedded with a different model or dimension than `embeddings.js` now
+      uses, the vectors are not comparable — 8.1 stored `embedding_model` and
+      `embedding_dim` precisely so this is detectable. It is an operational
+      fault, not a patient's problem: logged loudly server-side, while the
+      model simply gets nothing and says it does not know. Silently scoring
+      incomparable vectors is the outcome those columns exist to prevent.
+
+      **Rule 5 needed a NEW sanitiser, and the reason is specific.**
+      `sanitizeAdminText` works from a fixed field list that has no `content`,
+      and its long-text budget is **500 characters** — the longest passage is
+      **676**. Running help text through it would silently cut an answer off
+      mid-sentence: a worse outcome than the one it prevents, on text that was
+      never the threat. So `guardrails/sanitize.js` gains `sanitizePassage` —
+      the same control-and-format-character stripping (what stops a
+      line-leading `SYSTEM:` reaching the prompt), a passage-appropriate budget
+      and its own label. It lives in the guardrails file, not the tool, because
+      that file is explicitly the single definition and a tool keeping its own
+      stripping logic is what it forbids. The corpus is ours and committed to
+      the repo — the `_unverified` label is not about distrusting the author,
+      it is that **a retrieved passage is DATA whatever its provenance**.
+
+      **MCP DECISION — it IS on the patient server, and that is the state as
+      shipped.** `mcp/patient-server.js` registers `readOnlyTools`, so a
+      `mutates: false` tool lands there with no further decision: there is no
+      exclusion mechanism and adding one would itself be the change needing
+      justification. The argument for leaving it is that 4.4's known issue —
+      hosts calling tools more broadly than asked — costs nothing when the
+      widest possible result is more help-centre prose, and no patient data is
+      reachable through this tool at all.
+
+      **Recorded against that: the owner's lean is web-app-only** — low value
+      to a host model, and keeping the MCP surface small is a good instinct
+      when the surface is the security boundary. That is a defensible call and
+      it is NOT what the code does today, so it is written down here rather
+      than quietly resolved either way. Making it true needs a real change:
+      an opt-out on the descriptor (say `mcpExposed: false`) honoured by
+      `readOnlyTools`, plus a guardrail test pinning which tools reach MCP so
+      the next read-only tool is a deliberate choice rather than a default.
+      That is a follow-up increment, not a finalize-step edit.
+
+      **Consequence to fix with that decision, either way:** the patient server
+      now registers SEVEN read-only tools, so `patient-server.js`'s "Six
+      registrations" comment and `mcp/README.md`'s "six tools" are stale. They
+      are correct again if the tool becomes web-only, and need updating if it
+      stays — which is why they were left untouched here rather than guessed at.
+
+      **THE GUARDRAIL SUITE STAYS OFFLINE, and that shaped the design.** The
+      first version of this increment gave `guardrails.test.js` a real query
+      and let it call the handler — which made the always-run suite depend on
+      a real provider key. That breaks 6.4's deliberate property that **CI
+      holds no real credentials and spends no quota**: it would either fail on
+      a runner with no key, or force a real key into CI. Gating that one entry
+      behind `EMBEDDINGS_LIVE_TEST` would have made the retrieval guardrail
+      skip-by-default — the exact "a guarantee skipped by default is not a
+      guarantee" problem fixed for the sanitiser two paragraphs down.
+
+      So the query vector is **captured, not stubbed**:
+      `tests/fixtures/platformRetrieval.json` holds a real `RETRIEVAL_QUERY`
+      embedding of "how does the waitlist work?" plus three real passages with
+      the `RETRIEVAL_DOCUMENT` vectors `ingest:docs` actually stored. The suite
+      inserts those passages (a fresh CI database has `platform_docs` created
+      by migration 008 and EMPTY, since ingestion is manual and needs a key),
+      drives the production retrieval path through `retrieveWith`, and scans a
+      genuine result. Real vectors, real ranking, real sanitising, **no network
+      call**. The only step not exercised is turning a question into a vector,
+      which returns floats rather than patient data, and the full handler is
+      still covered by the opt-in LIVE tests.
+
+      The vector is passed **lazily** (`retrieve` takes a function, not a
+      value) so the empty-corpus check stays ahead of the embedding call. The
+      first attempt passed the value directly, which meant a misconfigured
+      database burned a request on every query — and broke the empty-corpus
+      test under a bogus key, which is how it was caught.
+
+      **Verification.** 19 new tests (backend **403, 394 pass, 9 skipped**, up
+      from 384/377/7) and **10 mutations, all caught**.
+
+      Six on the tool: drop the threshold, take only the winner, drop the
+      model-mismatch guard, drop the dimension guard, skip the sanitiser, and
+      stop normalising in `embeddings.js`. The ranking is a pure function
+      tested with hand-built unit vectors, so the floor, the ordering and both
+      guards are proven without the network.
+
+      Four on the offline arrangement, because a fixture that is not
+      load-bearing is decoration: with `platform_docs` **emptied to reproduce
+      the CI condition** and a bogus key, the suite passes 13/13 — then
+      removing the fixture insert fails it on an empty scan; **reversing** the
+      captured vector (still unit-length, meaningless direction) fails it, so
+      it is the real embedding doing the work and not merely an array of the
+      right shape; editing the fixture's `model` fails the freshness check with
+      "regenerate the fixture"; and removing the offline wiring so the handler
+      runs fails with a 400 from the provider — which is the proof that the
+      offline path is what makes it pass.
+
+      **Whole suite green with `GEMINI_API_KEY` bogus AND with it empty**
+      (403/394/9 both ways), so nothing in `npm test` reaches the real Gemini.
+      The **two opt-in LIVE tests** (`EMBEDDINGS_LIVE_TEST=1`) then run the
+      real corpus, where "how does the waitlist work?" returns
+      `waitlist-what-it-is` first and "what is the capital of France?" returns
+      **zero** passages — the floor doing its job end to end. Ratchet 0/0/0/0.
+
+      **TWO THINGS THIS INCREMENT CHANGED ABOUT ITS OWN PLAN, both found by
+      mutation rather than by review:**
+
+      1. **The vacuous-pass trap was not where the plan said it was.** The plan
+         expected a missing `TOOL_ARGS` entry to let `guardrails.test.js` pass
+         while testing a validation failure, as 7.5 found for `join_waitlist`.
+         Mutating it proved otherwise — the coverage assertion added earlier
+         already fails on a missing entry. The *real* hole is an entry whose
+         query the corpus cannot answer: it returns `[]`, and scanning an empty
+         array passes having examined nothing (confirmed — 11/11 with the entry
+         set to "what is the capital of France?"). Closed with
+         `MUST_RETURN_SOMETHING`, an opt-in list of tools whose fixture must
+         produce real data. Opt-in because `my_appointments` legitimately
+         returns `[]` for a patient with none.
+      2. **The sanitising had to be extracted to be provable.** It originally
+         lived inline in the handler, so the only test that could catch its
+         removal was a LIVE one — and a guarantee exercised once, then skipped
+         by default, is not a guarantee. `toResult` is now a pure exported
+         function, and the mutation that skips the sanitiser fails offline.
+
+      **The host line** (inheritance 3) is done: `ingestPlatformDocs.js` now
+      prints host, port, database and whether SSL is on, so telling local from
+      Aiven no longer rests on the row counts happening to be self-diagnosing.
 - [ ] **8.4** Write-up in `docs/agent-design.md`: why structured queries handle
       doctors and availability (computable answers from rows) and why RAG
       handles platform and policy content (explanatory prose with no SQL
