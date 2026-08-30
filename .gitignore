@@ -8,3 +8,4 @@ aiven-pre-005.sql
 # to share.
 .claude/
 aiven-pre-006.sql
+aiven-*.sql

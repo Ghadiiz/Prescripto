@@ -27,6 +27,45 @@ const APPOINTMENT_COLUMNS = `
 
 export const APPOINTMENT_RESULT_LIMIT = 20;
 
+// 7.5. Does this patient already hold an appointment with THIS ONE DOCTOR on
+// THIS ONE DAY?
+//
+// THE SCOPING IS THE POINT, and it is why this is a separate function rather
+// than an option on the one below. Every predicate is literal in the SQL:
+// there is no conditions array, no optional filter, and no code path that can
+// omit the doctor or the date. Widening it is an edit, not an argument.
+//
+// That is the rule-6 discipline the doctor tools use, applied to a patient
+// query because the failure mode is just as bad. This answer decides whether a
+// patient is told to CANCEL SOMETHING. A query that widened across doctors
+// would tell them to cancel an appointment with a doctor they never mentioned
+// — nonsensical and alarming, and exactly the bug the increment exists to
+// avoid rather than create.
+//
+// Three columns, because three are all that is needed: the caller already has
+// the doctor. Nothing here reaches for a name, and rule 4 forbids the `*` that
+// would drag one in.
+export const findAppointmentWithDoctorOnDate = async (
+  userId,
+  doctorId,
+  date,
+) => {
+  const db = getDB();
+
+  const [appointments] = await db.query(
+    `SELECT a.id, a.appointment_date, a.appointment_time
+       FROM appointments a
+      WHERE a.user_id = ?
+        AND a.doctor_id = ?
+        AND a.appointment_date = ?
+        AND a.status <> ?
+      ORDER BY a.appointment_time`,
+    [userId, doctorId, date, APPOINTMENT_STATUS.CANCELLED],
+  );
+
+  return appointments;
+};
+
 export const findAppointmentsForUser = async (userId, { status } = {}) => {
   const db = getDB();
 

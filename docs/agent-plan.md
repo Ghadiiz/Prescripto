@@ -1584,7 +1584,7 @@ rules moved from review to the linter (6.10).
         exactly that one test.
 ---
 
-## Phase 7 — Time-aware availability and actionable notifications
+## Phase 7 — Time-aware availability and actionable notifications — **COMPLETE** (5/5)
 
 Enhancements that came out of the Phase 5 live end-to-end test, plus one
 defect found in live testing after the Phase 6 go-live.
@@ -2002,8 +2002,73 @@ goes last. **7.5 sits after all of them for a different reason** — it consumes
       one, while a whole-day waiter heard about both — and 7.2's unread-dedupe
       correctly suppressed the whole-day waiter's second notice.
 
-- [ ] **7.5** **Waitlist aware of existing appointments** — the capstone.
+- [x] **7.5** **Waitlist aware of existing appointments** — the capstone.
       **Depends on 7.3 and 7.4; comes after both.**
+
+      > ### THREE DECISIONS TAKEN BEFORE BUILDING 7.5
+      >
+      > These change the shape of the increment from what the original entry
+      > below describes. Where they conflict with it, THESE WIN — the text
+      > below is kept because the reasoning in it still holds for the parts it
+      > covers, and rewriting history would hide that the design moved.
+      >
+      > **1. A waitlist entry is a SINGLE SLOT — one day, one time.** Not a
+      > range. A patient always has a specific time in mind, so the assistant
+      > asks for one. A vague request ("waitlist me Sep 1-5", "next week") is
+      > NARROWED first: the assistant uses 7.3's `free_times` to show what is
+      > available per day and asks which day and time, and only calls
+      > `join_waitlist` once it has one slot. Several days means several
+      > entries — the same-day rule below only blocks a day they already hold
+      > that doctor on.
+      >
+      > **2. 7.4's range/window schema is KEPT, and goes DORMANT BY DESIGN.**
+      > No migration removes `date_to` or the time-window columns.
+      >
+      > A single slot is stored as the degenerate case `date_from == date_to`
+      > with a single-slot time. This is deliberate. Removing the columns would
+      > mean a SECOND production migration on the table 007 just carefully
+      > migrated — rebuilding the generated `active_request` column and its
+      > unique index again, with the recovery risk that carries — for a purely
+      > cosmetic gain. Leaving them is zero-risk on data, constraints and
+      > performance (a single-slot row is valid data; the unique key and both
+      > CHECKs work correctly on it) and preserves cheap optionality:
+      > re-enabling ranges later would be relaxing a tool guard, not a
+      > migration. 7.4's range MATCHING code stays in place and stays tested.
+      >
+      > **Because the schema stays broad, single-slot is enforced
+      > STRUCTURALLY, not by assistant judgement.** `join_waitlist` rejects a
+      > multi-day or multi-hour request AT THE BOUNDARY, so single-slot is a
+      > tool-level guarantee rather than "the assistant usually narrows it".
+      > The dormancy is documented where a future reader will meet it, so the
+      > schema being broader than the feature reads as deliberate rather than
+      > accidental.
+      >
+      > **3. The block rule is SAME DOCTOR, SAME DAY.** Once there is a slot
+      > (day D, time T, doctor X), the request is blocked if the patient holds
+      > a confirmed, non-cancelled appointment with **doctor X on day D**.
+      >
+      > - **PER-DOCTOR SCOPED — a hard requirement.** The check considers ONLY
+      >   appointments with doctor X. It must never look at, mention, or
+      >   require cancelling an appointment with a DIFFERENT doctor. A Sep 3
+      >   appointment with Dr. Sara does NOT block waitlisting Dr. Richard for
+      >   Sep 3. Telling a patient to cancel another doctor's appointment would
+      >   be nonsensical and alarming. The query binds `doctor_id` and cannot
+      >   widen across doctors.
+      > - **SAME DAY only.** An appointment the day before, the day after, or
+      >   any other day does not block.
+      > - **STRUCTURAL REFUSAL.** The assistant refuses; it does not warn and
+      >   continue. To unblock, the patient cancels THROUGH THE APP. The
+      >   assistant never cancels — it stays read-only plus the single write
+      >   tool, and the 1.8 guardrail suite still fails if a second
+      >   `mutates: true` tool ever appears.
+      >
+      > **Step 3 becomes one lookup, not a scan.** Under single-slot there is
+      > no window to probe: `getAvailableSlots` is called once for day D and
+      > the tool checks whether T is in the free list — reusing it so "free"
+      > and "taken" keep one definition each. Free means there is nothing to
+      > waitlist and the patient is told to book it; taken means the request
+      > makes sense and proceeds to the same-day check and then the two-phase
+      > confirmation.
       - **Found in live testing of the Phase 6 go-live:** a patient
         successfully joined a waitlist for a doctor they ALREADY had a same-day
         appointment with. Redundant and confusing. `join_waitlist` knows
@@ -2064,6 +2129,86 @@ goes last. **7.5 sits after all of them for a different reason** — it consumes
       - **Depends on 7.3** to know whether the requested slot is taken, and on
         **7.4** so that "waitlist a specific time" exists at all. It is the
         capstone that ties the existing-appointment logic to both.
+
+      **BUILT, to the three decisions above rather than to the flow first
+      sketched here.** What follows is what shipped.
+
+      - **The single-slot guard is at the TOOL.** `date_from`, `date_to`,
+        `time_from` and `time_to` are all REQUIRED, and the handler refuses
+        unless the dates match and the times match. Requiring the times is the
+        load-bearing part: the model *cannot* call the tool without a specific
+        slot, so "waitlist me next week" HAS to be narrowed with
+        `check_availability` first. Narrowing stopped being something the
+        assistant remembers and became something it cannot avoid.
+      - **`MAX_WINDOW_DAYS` changed meaning rather than dying.** It measured a
+        span, which is now always zero. It measures REACH — how far ahead a
+        slot may be — so it stays load-bearing and stays equal to the booking
+        page's `BOOKABLE_DAYS`, with 7.4's drift test still guarding both.
+      - **The slot is classified three ways, not two.** Free, taken, or **not
+        a slot at all** — 10:17, 03:00, or a time that has already passed
+        today. That third case is the one worth having: waitlisting it writes
+        a row nothing can ever match, and the patient waits forever for
+        something that cannot happen. Both answers come from the functions
+        that already define "free" (`getAvailableSlots`) and "taken"
+        (`findAppointmentsByDoctorAndDate`), so neither word gains a second
+        meaning — and no constant had to be imported across the rule-6
+        boundary from the doctor tools to do it.
+      - **A free slot is refused**, with a `checked_at`: there is nothing to
+        wait for, and the patient is told to book it. Rule 7 reaches the
+        preview too, which now carries `slot_status: 'taken'` and its own
+        `checked_at` — "this slot is taken, which is why a waitlist makes
+        sense" is an availability claim like any other and must not read as
+        settled.
+
+      **THE PER-DOCTOR SCOPING, which was the hard requirement.**
+      `findAppointmentWithDoctorOnDate(userId, doctorId, date)` is a separate
+      function rather than an option on the existing one, and every predicate
+      is literal in its SQL: no conditions array, no optional filter, no code
+      path that can omit the doctor or the date. **Widening it is an edit, not
+      an argument.**
+
+      That is the rule-6 discipline applied to a patient query, because the
+      failure mode is just as bad: this answer decides whether a patient is
+      told to CANCEL SOMETHING, and a query that widened would tell them to
+      cancel an appointment with a doctor they never mentioned. Verified from
+      both sides — a same-day appointment with a different doctor does not
+      block, and the whole result is asserted not to contain that doctor's
+      name anywhere.
+
+      **The gate is STRUCTURAL, not advisory.** It runs on the CONFIRM call as
+      well as the preview, so a conflict created in between still stops the
+      write. A mutation that checks only at the preview fails that test.
+
+      **The assistant still cannot cancel anything.** It names the conflicting
+      time and says the patient cancels in the app. `join_waitlist` remains the
+      only `mutates: true` tool.
+
+      *One deviation from the plan, and the plan was wrong.* It said
+      availability would NOT be re-checked on confirm, reasoning that refusing
+      something the patient had just agreed to would be worse than a wasted
+      row. That reasoning treated the refusal as a loss — but "the slot you
+      wanted is free now, go and book it" is the best outcome available, not a
+      frustration. The check runs on both phases.
+
+      **Verification.** 344 backend tests (339 pass, 5 skipped) and 70
+      frontend, with **9 mutations all caught** — including the widening bug
+      itself: dropping `doctor_id` from the scoped query fails the
+      different-doctor test. End to end against the real database, all six
+      cases: a free slot refused; a taken one proceeding; a different doctor's
+      same-day appointment neither blocking nor being mentioned; the same
+      doctor's blocking with the time named and the app pointed to; a conflict
+      appearing between preview and confirm still blocking with zero rows
+      written; and finally one row stored as the degenerate range
+      `2026-09-03..2026-09-03  10:00:00..10:00:00`.
+
+      *A vacuous test found and repaired on the way through.*
+      `guardrails.test.js` called `join_waitlist` with a bare date to exercise
+      its PREVIEW. Once 7.5 required a time, that fixture failed the schema and
+      returned an error object instead — which carries no banned field either,
+      so **the suite kept passing while testing a validation failure rather
+      than a summary.** Proved by reverting the fixture and watching it pass.
+      It now books the slot first, so the preview is reachable and the suite
+      tests what it says it does.
 
 ---
 

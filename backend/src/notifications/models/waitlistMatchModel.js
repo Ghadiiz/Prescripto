@@ -5,6 +5,15 @@ import { getDB } from '../../config/mysql.js';
 // The waitlist is WRITTEN by the assistant's join_waitlist tool and READ here,
 // so the query lives with the notifier that uses it rather than beside the
 // insert.
+//
+// THE RANGE MATCHING BELOW IS DORMANT, AND STAYS ON PURPOSE. Since 7.5 the
+// tool only writes SINGLE SLOTS (`date_from == date_to`,
+// `time_from == time_to`), so in production these predicates mostly compare a
+// date and a time against themselves. They are kept, and kept tested, because
+// rows written before 7.5 are genuine ranges, whole-day rows from before 7.4
+// have NULL time bounds, and the schema still permits both. See the note in
+// `assistant/models/waitlistQueries.js` for why the columns were not migrated
+// away.
 
 // Shaped to match 006's `idx_match (doctor_id, status, date_from, date_to)`:
 // equality on the first two columns, the range last. That index was created

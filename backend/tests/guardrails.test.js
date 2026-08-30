@@ -48,6 +48,10 @@ const TEST_EMAIL_PREFIX = 'guardrail-test-';
 let db;
 let ctx;
 let baseline;
+let slotHolderId;
+
+// A half-hour start inside the 10:00-21:00 grid, so it is a real slot.
+const WAITLIST_SLOT = '10:00';
 
 // Representative arguments for every registered tool. A tool added without an
 // entry here fails the coverage assertion in the banned-field test, so a new
@@ -104,8 +108,6 @@ before(async () => {
 
   await connectDB();
   db = getDB();
-  baseline = await countRows();
-
   const [[patient]] = await db.query(
     "SELECT id FROM users WHERE role = 'patient' ORDER BY id LIMIT 1",
   );
@@ -125,17 +127,55 @@ before(async () => {
     // this suite asserts no tool result carries a banned field, and the
     // preview's summary is a tool result like any other. The write path gets
     // its own suite in joinWaitlist.test.js.
+    //
+    // 7.5 made this fixture fragile in a way worth naming. The tool now
+    // requires a SINGLE SLOT that is already TAKEN, so the obvious fixture —
+    // a bare date — fails the schema and returns an error object instead. That
+    // object carries no banned field either, so this suite would still have
+    // PASSED while quietly testing a validation failure rather than a summary.
+    // The booking below is what keeps it testing the thing it claims to.
     join_waitlist: {
       doctor_id: doctor.id,
       date_from: tomorrow(),
       date_to: tomorrow(),
+      time_from: WAITLIST_SLOT,
+      time_to: WAITLIST_SLOT,
     },
   };
+
+  // Occupy the slot so the preview is reachable. Booked by the injection
+  // doctor's own throwaway patient, never by the ctx patient — a same-day
+  // appointment of their own would trip 7.5's gate and, again, return a
+  // refusal where this suite expects a summary.
+  const [slotHolder] = await db.query(
+    'INSERT INTO users (name, email, password, role, is_verified) VALUES (?, ?, ?, ?, 1)',
+    [
+      'Guardrail Slot Holder',
+      `guardrail-slot-${Date.now()}@example.invalid`,
+      'not-a-real-password-hash',
+      'patient',
+    ],
+  );
+  slotHolderId = slotHolder.insertId;
+
+  await db.query(
+    `INSERT INTO appointments (user_id, doctor_id, appointment_date, appointment_time, status, amount)
+     VALUES (?, ?, ?, ?, 'pending', 50)`,
+    [slotHolderId, doctor.id, tomorrow(), `${WAITLIST_SLOT}:00`],
+  );
+
+  // Counted AFTER the fixture rows exist, so the end-of-suite comparison is
+  // against the state this suite starts from rather than the empty database.
+  baseline = await countRows();
 });
 
 // Close the connection so the runner exits instead of hanging on an open
 // socket. mysql.js has no close helper and does not need one for production.
 after(async () => {
+  // CASCADE takes the appointment with them.
+  if (slotHolderId) {
+    await db.query('DELETE FROM users WHERE id = ?', [slotHolderId]);
+  }
   await db.end();
   await closeRedis();
 });

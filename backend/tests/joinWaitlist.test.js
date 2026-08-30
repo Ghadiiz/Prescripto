@@ -17,6 +17,7 @@ import joinWaitlist from '../src/assistant/tools/joinWaitlist.js';
 let db;
 let patientA;
 let patientB;
+let occupier;
 let doctorId;
 let otherDoctorId;
 
@@ -32,8 +33,37 @@ const isoDaysFromNow = (offset) => {
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
 };
 
-const FROM = isoDaysFromNow(3);
+// 7.5 made a waitlist entry a SINGLE SLOT, and one that must already be TAKEN
+// — a free slot is refused because there is nothing to wait for. So the
+// fixture books the slot with a THIRD patient: booking it with patientA or
+// patientB would trip the same-day rule and change which refusal fires.
+const SLOT_DATE = isoDaysFromNow(3);
+const SLOT_TIME = '10:00';
+const OTHER_SLOT_TIME = '11:30';
+
+const FROM = SLOT_DATE;
 const TO = isoDaysFromNow(9);
+
+// The arguments every test starts from: one doctor, one day, one taken slot.
+const slotArgs = (overrides = {}) => ({
+  doctor_id: doctorId,
+  date_from: SLOT_DATE,
+  date_to: SLOT_DATE,
+  time_from: SLOT_TIME,
+  time_to: SLOT_TIME,
+  ...overrides,
+});
+
+// Books `time` on `date` with `doctor` for whoever is given, so a slot can be
+// made taken (the fixture) or a conflict created (the 7.5 gate).
+const book = async (userId, { date = SLOT_DATE, time = SLOT_TIME, doctor } = {}) => {
+  const [result] = await db.query(
+    `INSERT INTO appointments (user_id, doctor_id, appointment_date, appointment_time, status, amount)
+     VALUES (?, ?, ?, ?, 'pending', 50)`,
+    [userId, doctor ?? doctorId, date, `${time}:00`],
+  );
+  return result.insertId;
+};
 
 const join = (ctx, args, sessionId = SESSION_A) =>
   runTool(ctx, 'join_waitlist', args, { sessionId });
@@ -70,6 +100,7 @@ before(async () => {
 
   patientA = await make('A');
   patientB = await make('B');
+  occupier = await make('occupier');
 
   const [doctors] = await db.query(
     'SELECT id FROM doctors WHERE available = 1 ORDER BY id LIMIT 2',
@@ -83,22 +114,33 @@ after(async () => {
     patientA,
     patientB,
   ]);
-  // CASCADE takes the waitlist rows.
-  await db.query('DELETE FROM users WHERE id IN (?, ?)', [patientA, patientB]);
+  // CASCADE takes the waitlist and appointment rows.
+  await db.query('DELETE FROM users WHERE id IN (?, ?, ?)', [
+    patientA,
+    patientB,
+    occupier,
+  ]);
   await db.end();
   await closeRedis();
 });
 
 const clear = async () => {
   await resetConfirmations();
-  await db.query('DELETE FROM waitlist WHERE user_id IN (?, ?)', [patientA, patientB]);
+  const ids = [patientA, patientB, occupier];
+  await db.query('DELETE FROM waitlist WHERE user_id IN (?)', [ids]);
+  await db.query('DELETE FROM appointments WHERE user_id IN (?)', [ids]);
   await db.query('DELETE FROM assistant_audit_log WHERE user_id IN (?, ?)', [
     patientA,
     patientB,
   ]);
 };
 
-beforeEach(clear);
+beforeEach(async () => {
+  await clear();
+  // The slot under test is TAKEN, which is the only state a waitlist request
+  // is allowed in since 7.5.
+  await book(occupier);
+});
 afterEach(clear);
 
 // --- the core guarantee -----------------------------------------------------
@@ -106,15 +148,15 @@ afterEach(clear);
 test('a single call cannot write, whatever it asks for', async () => {
   const before = await countWaitlist();
 
-  const result = await join(ctxFor(patientA), {
-    doctor_id: doctorId,
-    date_from: FROM,
-    date_to: TO,
-  });
+  const result = await join(ctxFor(patientA), slotArgs());
 
   assert.equal(result.status, 'confirmation_required');
   assert.ok(result.confirmation_token, 'a token must come back');
-  assert.equal(result.summary.date_from, FROM);
+  assert.equal(result.summary.date_from, SLOT_DATE);
+  assert.equal(result.summary.time_from, SLOT_TIME);
+  // Rule 7 reaches the preview: the slot is taken AS OF a moment.
+  assert.equal(result.summary.slot_status, 'taken');
+  assert.match(result.summary.checked_at, /^\d{4}-\d{2}-\d{2}T/);
 
   // The assertion that matters: the database is untouched.
   assert.equal(await countWaitlist(), before, 'the preview call wrote a row');
@@ -122,7 +164,7 @@ test('a single call cannot write, whatever it asks for', async () => {
 
 test('a second call carrying the token writes exactly one row', async () => {
   const ctx = ctxFor(patientA);
-  const args = { doctor_id: doctorId, date_from: FROM, date_to: TO };
+  const args = slotArgs();
 
   const preview = await join(ctx, args);
   const written = await join(ctx, {
@@ -145,7 +187,7 @@ test('a second call carrying the token writes exactly one row', async () => {
 // --- what the token is bound to ---------------------------------------------
 
 test('a token minted for one patient cannot be spent by another', async () => {
-  const args = { doctor_id: doctorId, date_from: FROM, date_to: TO };
+  const args = slotArgs();
 
   const preview = await join(ctxFor(patientA), args);
 
@@ -163,7 +205,7 @@ test('a token minted for one patient cannot be spent by another', async () => {
 
 test('a token cannot be replayed', async () => {
   const ctx = ctxFor(patientA);
-  const args = { doctor_id: doctorId, date_from: FROM, date_to: TO };
+  const args = slotArgs();
 
   const preview = await join(ctx, args);
   const withToken = { ...args, confirmation_token: preview.confirmation_token };
@@ -178,14 +220,19 @@ test('a token cannot be replayed', async () => {
 
 test('a token cannot be spent for different details than it was shown for', async () => {
   const ctx = ctxFor(patientA);
-  const args = { doctor_id: doctorId, date_from: FROM, date_to: TO };
+  const args = slotArgs();
 
   const preview = await join(ctx, args);
 
-  // The patient agreed to one doctor; the write names another.
+  // The patient agreed to one slot; the write names another. (7.5 swaps the
+  // TIME rather than the doctor: a different doctor's 10:00 is free, so the
+  // availability refusal would fire before the token was ever examined, and
+  // the test would pass for the wrong reason.)
+  await book(occupier, { time: OTHER_SLOT_TIME });
   const swapped = await join(ctx, {
     ...args,
-    doctor_id: otherDoctorId,
+    time_from: OTHER_SLOT_TIME,
+    time_to: OTHER_SLOT_TIME,
     confirmation_token: preview.confirmation_token,
   });
 
@@ -195,7 +242,7 @@ test('a token cannot be spent for different details than it was shown for', asyn
 
 test('a token cannot cross conversations', async () => {
   const ctx = ctxFor(patientA);
-  const args = { doctor_id: doctorId, date_from: FROM, date_to: TO };
+  const args = slotArgs();
 
   const preview = await join(ctx, args, SESSION_A);
   const elsewhere = await join(
@@ -209,12 +256,10 @@ test('a token cannot cross conversations', async () => {
 });
 
 test('an invented token is refused', async () => {
-  const attempt = await join(ctxFor(patientA), {
-    doctor_id: doctorId,
-    date_from: FROM,
-    date_to: TO,
-    confirmation_token: 'not-a-token-we-issued',
-  });
+  const attempt = await join(
+    ctxFor(patientA),
+    slotArgs({ confirmation_token: 'not-a-token-we-issued' }),
+  );
 
   assert.equal(attempt.reason, 'confirmation_invalid');
   assert.equal(await countWaitlist(), 0);
@@ -224,7 +269,7 @@ test('an invented token is refused', async () => {
 
 test('joining twice reports already_waiting and leaves one row', async () => {
   const ctx = ctxFor(patientA);
-  const args = { doctor_id: doctorId, date_from: FROM, date_to: TO };
+  const args = slotArgs();
 
   const first = await join(ctx, args);
   await join(ctx, { ...args, confirmation_token: first.confirmation_token });
@@ -247,34 +292,24 @@ test('bad requests are refused at the preview, minting no token', async () => {
   const ctx = ctxFor(patientA);
 
   const cases = [
-    [{ doctor_id: doctorId, date_from: isoDaysFromNow(-2), date_to: TO }, 'date_in_past'],
-    [{ doctor_id: doctorId, date_from: TO, date_to: FROM }, 'range_reversed'],
-    [
-      { doctor_id: doctorId, date_from: FROM, date_to: isoDaysFromNow(60) },
-      'range_too_long',
-    ],
-    [{ doctor_id: 99999999, date_from: FROM, date_to: TO }, 'doctor_not_found'],
-    // 7.4. Both bounds or neither: a one-sided window cannot be matched
-    // against, and the database CHECKs it too — but a refusal the model can
-    // read beats a constraint violation thrown after the patient confirmed.
-    [
-      { doctor_id: doctorId, date_from: FROM, date_to: TO, time_from: '10:00' },
-      'time_range_incomplete',
-    ],
-    [
-      { doctor_id: doctorId, date_from: FROM, date_to: TO, time_to: '12:00' },
-      'time_range_incomplete',
-    ],
-    [
-      {
-        doctor_id: doctorId,
-        date_from: FROM,
-        date_to: TO,
-        time_from: '17:00',
-        time_to: '09:00',
-      },
-      'time_range_reversed',
-    ],
+    [slotArgs({ date_from: isoDaysFromNow(-2), date_to: isoDaysFromNow(-2) }),
+      'date_in_past'],
+    // 7.5 turned MAX_WINDOW_DAYS from a span into a reach: a slot further
+    // ahead than the booking page can show is one the patient cannot act on.
+    [slotArgs({ date_from: isoDaysFromNow(60), date_to: isoDaysFromNow(60) }),
+      'date_too_far'],
+    [slotArgs({ doctor_id: 99999999 }), 'doctor_not_found'],
+    // 7.5: the single-slot guard. The COLUMNS still accept a range — 007's
+    // schema is kept and dormant — so this refusal is the only thing making
+    // single-slot a guarantee rather than a habit.
+    [slotArgs({ date_to: TO }), 'not_a_single_slot'],
+    [slotArgs({ time_to: '12:00' }), 'not_a_single_slot'],
+    // A time nothing could ever be booked at. Without this the row is written
+    // and the patient waits forever for a slot that cannot free.
+    [slotArgs({ time_from: '03:00', time_to: '03:00' }), 'not_a_bookable_slot'],
+    [slotArgs({ time_from: '10:17', time_to: '10:17' }), 'not_a_bookable_slot'],
+    // Nothing to wait for.
+    [slotArgs({ time_from: '11:00', time_to: '11:00' }), 'slot_already_free'],
   ];
 
   for (const [args, reason] of cases) {
@@ -286,106 +321,75 @@ test('bad requests are refused at the preview, minting no token', async () => {
   assert.equal(await countWaitlist(), 0);
 });
 
-// --- 7.4: the time window ----------------------------------------------------
+// --- 7.5: one slot, and it must be a real, taken one -------------------------
 
-test('the requested hours reach the row', async () => {
+test('the requested slot reaches the row as a degenerate range', async () => {
   const ctx = ctxFor(patientA);
-  const args = {
-    doctor_id: doctorId,
-    date_from: FROM,
-    date_to: TO,
-    time_from: '10:00',
-    time_to: '12:00',
-  };
+  const args = slotArgs();
 
   const preview = await join(ctx, args);
-  assert.equal(preview.summary.time_from, '10:00');
-  assert.equal(preview.summary.time_to, '12:00');
-
   await join(ctx, { ...args, confirmation_token: preview.confirmation_token });
 
   const [[row]] = await db.query(
-    'SELECT time_from, time_to FROM waitlist WHERE user_id = ?',
+    'SELECT date_from, date_to, time_from, time_to FROM waitlist WHERE user_id = ?',
     [patientA],
   );
 
-  // MySQL hands TIME back as HH:MM:SS.
-  assert.equal(row.time_from, '10:00:00');
-  assert.equal(row.time_to, '12:00:00');
+  // 007's range columns are still there and still correct — a single slot is
+  // stored as from == to. That is the dormancy, visible in the data.
+  assert.equal(row.time_from, `${SLOT_TIME}:00`);
+  assert.equal(row.time_to, `${SLOT_TIME}:00`);
+  assert.equal(String(row.date_from).slice(0, 10), String(row.date_to).slice(0, 10));
 });
 
-test('a request with no hours still writes a whole-day row', async () => {
-  const ctx = ctxFor(patientA);
-  const args = { doctor_id: doctorId, date_from: FROM, date_to: TO };
+test('a multi-day request is refused at the tool, not stored', async () => {
+  const result = await join(ctxFor(patientA), slotArgs({ date_to: TO }));
 
-  const preview = await join(ctx, args);
-  assert.equal(preview.summary.time_from, null);
-
-  await join(ctx, { ...args, confirmation_token: preview.confirmation_token });
-
-  const [[row]] = await db.query(
-    'SELECT time_from, time_to FROM waitlist WHERE user_id = ?',
-    [patientA],
-  );
-  assert.equal(row.time_from, null);
-  assert.equal(row.time_to, null);
-});
-
-test('confirming a MORNING request cannot write an afternoon one', async () => {
-  // The token is bound to the whole argument object, so 7.4's new fields are
-  // covered by 5.3's guarantee without any change to it. Worth asserting: the
-  // hours are the part a patient is most likely to be shown and agree to.
-  const ctx = ctxFor(patientA);
-  const morning = {
-    doctor_id: doctorId,
-    date_from: FROM,
-    date_to: TO,
-    time_from: '10:00',
-    time_to: '12:00',
-  };
-
-  const preview = await join(ctx, morning);
-
-  const result = await join(ctx, {
-    ...morning,
-    time_from: '14:00',
-    time_to: '17:00',
-    confirmation_token: preview.confirmation_token,
-  });
-
-  assert.equal(result.reason, 'confirmation_invalid');
+  assert.equal(result.reason, 'not_a_single_slot');
+  assert.ok(!result.confirmation_token, 'a range was offered for confirmation');
   assert.equal(await countWaitlist(), 0);
 });
 
-test('mornings and afternoons are two requests, not a duplicate', async () => {
+test('confirming one slot cannot write a different slot', async () => {
+  // 7.4's guarantee, in single-slot form. The token binds every argument, so
+  // the time is covered the same way the doctor and dates are.
   const ctx = ctxFor(patientA);
-  const base = { doctor_id: doctorId, date_from: FROM, date_to: TO };
+  const args = slotArgs();
 
-  for (const times of [
-    { time_from: '10:00', time_to: '12:00' },
-    { time_from: '14:00', time_to: '17:00' },
-  ]) {
-    const args = { ...base, ...times };
+  const preview = await join(ctx, args);
+  await book(occupier, { time: OTHER_SLOT_TIME });
+
+  const swapped = await join(ctx, {
+    ...args,
+    time_from: OTHER_SLOT_TIME,
+    time_to: OTHER_SLOT_TIME,
+    confirmation_token: preview.confirmation_token,
+  });
+
+  assert.equal(swapped.reason, 'confirmation_invalid');
+  assert.equal(await countWaitlist(), 0);
+});
+
+test('two different slots are two requests, not a duplicate', async () => {
+  const ctx = ctxFor(patientA);
+  await book(occupier, { time: OTHER_SLOT_TIME });
+
+  for (const time of [SLOT_TIME, OTHER_SLOT_TIME]) {
+    const args = slotArgs({ time_from: time, time_to: time });
     const preview = await join(ctx, args);
     const result = await join(ctx, {
       ...args,
       confirmation_token: preview.confirmation_token,
     });
-    assert.equal(result.status, 'joined', JSON.stringify(times));
+    assert.equal(result.status, 'joined', time);
   }
 
   assert.equal(await countWaitlist(), 2);
 });
 
-test('the SAME hours twice reports already_waiting', async () => {
+test('the SAME slot twice reports already_waiting', async () => {
   const ctx = ctxFor(patientA);
-  const args = {
-    doctor_id: doctorId,
-    date_from: FROM,
-    date_to: TO,
-    time_from: '10:00',
-    time_to: '12:00',
-  };
+  const args = slotArgs();
 
   for (let attempt = 0; attempt < 2; attempt += 1) {
     const preview = await join(ctx, args);
@@ -394,36 +398,137 @@ test('the SAME hours twice reports already_waiting', async () => {
       confirmation_token: preview.confirmation_token,
     });
 
-    if (attempt === 1) {
-      assert.equal(result.status, 'already_waiting');
-      assert.match(result.message, /dates and hours/);
-    }
+    if (attempt === 1) assert.equal(result.status, 'already_waiting');
   }
 
   assert.equal(await countWaitlist(), 1);
 });
 
+test('a free slot is refused, with nothing written', async () => {
+  const result = await join(
+    ctxFor(patientA),
+    slotArgs({ time_from: '11:00', time_to: '11:00' }),
+  );
+
+  assert.equal(result.reason, 'slot_already_free');
+  // Rule 7: the claim is a snapshot, and says so.
+  assert.match(result.checked_at, /^\d{4}-\d{2}-\d{2}T/);
+  assert.ok(!result.confirmation_token);
+  assert.equal(await countWaitlist(), 0);
+});
+
 test('a time that is not a time is rejected by the schema', async () => {
   for (const bad of ['10am', '25:00', '10:60', '10:00:00', 'morning']) {
     const parsed = joinWaitlist.schema.safeParse({
-      doctor_id: doctorId,
-      date_from: FROM,
-      date_to: TO,
+      ...slotArgs(),
       time_from: bad,
-      time_to: '12:00',
     });
     assert.equal(parsed.success, false, `${bad} was accepted`);
   }
 });
 
+test('a request with no time at all is rejected by the schema', async () => {
+  // Required, and that is what forces the assistant to narrow a vague ask
+  // with check_availability before it can call this tool at all.
+  const parsed = joinWaitlist.schema.safeParse({
+    doctor_id: doctorId,
+    date_from: SLOT_DATE,
+    date_to: SLOT_DATE,
+  });
+  assert.equal(parsed.success, false);
+});
+
+// --- 7.5: the same-doctor, same-day gate -------------------------------------
+
+test('an appointment with THAT doctor on THAT day blocks the waitlist', async () => {
+  await book(patientA, { time: '15:00' });
+
+  const result = await join(ctxFor(patientA), slotArgs());
+
+  assert.equal(result.reason, 'already_booked_that_day');
+  assert.ok(!result.confirmation_token, 'a blocked request was offered anyway');
+  assert.equal(await countWaitlist(), 0);
+});
+
+test('the refusal names the existing time and says the app cancels, not us', async () => {
+  await book(patientA, { time: '15:00' });
+
+  const result = await join(ctxFor(patientA), slotArgs());
+
+  assert.match(result.message, /03:00 PM/, 'the patient needs to know which one');
+  assert.match(result.message, /in the app/i);
+  assert.match(result.message, /cannot cancel/i);
+});
+
+test('AN APPOINTMENT WITH A DIFFERENT DOCTOR DOES NOT BLOCK', async () => {
+  // The hard requirement. Same patient, same day, DIFFERENT doctor — and the
+  // refusal must not exist, let alone name that doctor.
+  await book(patientA, { time: '15:00', doctor: otherDoctorId });
+
+  const result = await join(ctxFor(patientA), slotArgs());
+
+  assert.equal(result.status, 'confirmation_required');
+  assert.ok(result.confirmation_token);
+});
+
+test('no message anywhere can name another doctor’s appointment', async () => {
+  // Belt and braces on the same requirement, from the other side: whatever
+  // the tool says, it can only have looked at the doctor it was asked about.
+  const [[other]] = await db.query('SELECT name FROM doctors WHERE id = ?', [
+    otherDoctorId,
+  ]);
+  await book(patientA, { time: '15:00', doctor: otherDoctorId });
+
+  const result = await join(ctxFor(patientA), slotArgs());
+
+  assert.ok(
+    !JSON.stringify(result).includes(other.name),
+    `the result mentioned ${other.name}, a doctor the patient never asked about`,
+  );
+});
+
+test('an appointment on a DIFFERENT day does not block', async () => {
+  for (const offset of [-1, 1]) {
+    await book(patientA, { date: isoDaysFromNow(3 + offset), time: '15:00' });
+  }
+
+  const result = await join(ctxFor(patientA), slotArgs());
+
+  assert.equal(result.status, 'confirmation_required');
+});
+
+test('a CANCELLED appointment that day does not block', async () => {
+  const id = await book(patientA, { time: '15:00' });
+  await db.query("UPDATE appointments SET status = 'cancelled' WHERE id = ?", [id]);
+
+  const result = await join(ctxFor(patientA), slotArgs());
+
+  assert.equal(result.status, 'confirmation_required');
+});
+
+test('the gate is STRUCTURAL: it blocks on the confirm call too', async () => {
+  // The invariant would be advisory if it only ran at the preview. A conflict
+  // created between the two calls must still stop the write.
+  const ctx = ctxFor(patientA);
+  const args = slotArgs();
+
+  const preview = await join(ctx, args);
+  assert.equal(preview.status, 'confirmation_required');
+
+  await book(patientA, { time: '15:00' });
+
+  const written = await join(ctx, {
+    ...args,
+    confirmation_token: preview.confirmation_token,
+  });
+
+  assert.equal(written.reason, 'already_booked_that_day');
+  assert.equal(await countWaitlist(), 0, 'the write went through anyway');
+});
+
 test('an identity argument is rejected by the schema, not ignored', async () => {
   for (const key of ['user_id', 'userId', 'patient_id']) {
-    const result = await join(ctxFor(patientA), {
-      doctor_id: doctorId,
-      date_from: FROM,
-      date_to: TO,
-      [key]: patientB,
-    });
+    const result = await join(ctxFor(patientA), slotArgs({ [key]: patientB }));
 
     assert.equal(result.error, 'invalid_arguments', `${key} was accepted`);
   }
@@ -435,7 +540,7 @@ test('an identity argument is rejected by the schema, not ignored', async () => 
 
 test('the audit row is written BEFORE the row it describes', async () => {
   const ctx = ctxFor(patientA);
-  const args = { doctor_id: doctorId, date_from: FROM, date_to: TO };
+  const args = slotArgs();
   const preview = await join(ctx, args);
 
   // Prove the ordering by observing from inside the write itself: at the
@@ -482,11 +587,7 @@ test('the audit row is written BEFORE the row it describes', async () => {
 });
 
 test('the preview is audited too, and carries no token in its arguments', async () => {
-  await join(ctxFor(patientA), {
-    doctor_id: doctorId,
-    date_from: FROM,
-    date_to: TO,
-  });
+  await join(ctxFor(patientA), slotArgs());
 
   const [rows] = await db.query(
     "SELECT `arguments`, result_count FROM assistant_audit_log WHERE user_id = ? AND tool_name = 'join_waitlist'",
