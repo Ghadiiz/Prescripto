@@ -11,6 +11,7 @@
     "server": "nodemon server.js",
     "migrate": "node database/migrate.js",
     "seed": "node database/seed.js",
+    "ingest:docs": "node database/ingestPlatformDocs.js",
     "worker": "node src/queue/waitlistWorker.js",
     "lint": "eslint ."
   },

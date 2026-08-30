@@ -160,9 +160,22 @@ Each tool is a descriptor, not a bare function:
 
 ## LLM provider
 
-Development uses the Google Gemini free tier (Flash). Only
-`backend/src/assistant/agentService.js` may know which provider is in use —
-tools, schemas and guardrails stay provider-agnostic.
+Development uses the Google Gemini free tier (Flash). **Exactly two files may
+know which provider is in use** — tools, schemas and guardrails stay
+provider-agnostic:
+
+- `backend/src/assistant/agentService.js` — chat completions and the agent loop
+- `backend/src/assistant/embeddings.js` — embeddings for Phase 8's retrieval
+
+*This rule named only `agentService.js` until 8.2, which needed an embedding
+client. It was widened deliberately rather than broken quietly: what the rule
+protects is that swapping providers touches a known, small set of files, and a
+second file that silently contradicted it would have cost exactly that. The
+retry policy is NOT duplicated — `embeddings.js` imports `computeBackoffMs` and
+`ProviderError` from `agentService.js`, so there is one implementation of how a
+429 is handled.*
+
+**Adding a third such file needs the same conversation.**
 
 Free tier is ~15 requests/minute, so implement exponential backoff with jitter
 on 429 responses from the start.
