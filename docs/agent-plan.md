@@ -22,11 +22,34 @@ Which migrations have been applied to the **Aiven production database**. Local
 and production are migrated separately — `npm run migrate` from a dev machine
 hits whatever `backend/.env` points at, which is normally local MySQL.
 
-**All five migrations are applied** — 001–004 on 2026-08-16, 005 on
-2026-08-19. The `schema_migrations` ledger on Aiven holds all five rows, so
+**001–006 are applied** — 001–004 on 2026-08-16, 005 on 2026-08-19, 006 on
+2026-08-24. The `schema_migrations` ledger on Aiven holds those six rows, so
 re-running the runner there is a no-op — and **do not re-apply any of them by
 hand**: the `ALTER`/`CREATE` statements would fail on duplicate columns, tables
 and keys.
+
+> ### PENDING: 007_waitlist_time_window.sql
+>
+> **Not yet applied to Aiven.** Written and applied locally in 7.4.
+>
+> **This one has a deploy ORDER, unlike every migration before it.** 7.4's code
+> INSERTs and SELECTs `waitlist.time_from` / `time_to`, so it cannot run
+> against an un-migrated database: the waitlist write and the notifier's match
+> would both fail on unknown columns. **Apply 007 to Aiven BEFORE merging Phase
+> 7 to `main`**, not after. The reverse order is a broken waitlist, not a
+> degraded one.
+>
+> It is the first migration to run against a table that HOLDS PRODUCTION ROWS —
+> 006's two tables were new and empty. It drops and rebuilds the
+> `active_request` generated column and its unique key, so between those
+> statements the duplicate guarantee is briefly absent. Take a fresh backup
+> first, as with 005.
+>
+> Afterwards, verify as 005 and 006 were: `SHOW INDEXES` for
+> `unique_active_request` (`Non_unique = 0`), and confirm the rebuilt column
+> carries **COALESCE** on both time components — without it the key goes NULL
+> for every existing whole-day row and the uniqueness guarantee silently
+> switches off. That is the trap 7.4 was shaped around.
 
 - **001_doctors_profile_fields.sql** — `experience_years`, `languages` and
   `gender` on `doctors`; the backfill converted the `experience` strings to
@@ -83,6 +106,20 @@ it opens a connection.
 
 Pre-existing app bugs found while building something else. Logged so they are
 not lost; none blocks the current phase.
+
+- **With Redis merely UNREACHABLE, seven `joinWaitlist` tests fail as
+  `refused` — and that is the design working.** 6.1 gives Redis three states,
+  and DEGRADED (configured but erroring) is not DISABLED (never configured).
+  `spendConfirmation` fails CLOSED while degraded, because it guards a write a
+  patient authorised and uncertainty must mean no. So if Docker is not running
+  while `REDIS_URL` is still set, the confirmation tests fail in a way that
+  looks like a broken write path.
+
+  The tell is the timing: those tests take 6-12 seconds each, which is
+  connection retries, not logic. Running the suite with `REDIS_URL=` unset puts
+  Redis in DISABLED and the memory path takes over — so **that is the
+  discriminator**: if the failures vanish with `REDIS_URL=` unset, it is the
+  outage, not the code. *Found during 7.4, when Docker was down.*
 
 - **`npm run server` and `npm test` share one Redis queue, and the dev
   server's worker steals the tests' jobs.** Running the backend suite with a
@@ -1833,7 +1870,7 @@ goes last. **7.5 sits after all of them for a different reason** — it consumes
       `11:30 AM` from `free_times` while 11:00 and 12:00 stay, and the count
       drops by exactly one.
 
-- [ ] **7.4** **Time-range waitlist** (schema change — the biggest item, last).
+- [x] **7.4** **Time-range waitlist** (schema change — the biggest item, last).
       `join_waitlist` and the `waitlist` table are DATE-range only
       (`date_from`/`date_to`), and 5.4's notifier matches on the date a slot
       frees, not the hour. To support *"waitlist me if 10am–2pm frees up
@@ -1877,6 +1914,93 @@ goes last. **7.5 sits after all of them for a different reason** — it consumes
         `MAX_WINDOW_DAYS` in `joinWaitlist.js` must stop being two independent
         numbers that happen to disagree.** That they disagree at all is the
         bug; 7.1 named it rather than fixed it.
+
+      **RESOLVED: they are one number, 30.** The booking strip was extended
+      rather than the waitlist capped — every date a patient can be notified
+      about is now a date they can book. One assumption from 7.1's deferral was
+      wrong and worth correcting: the page fetches slots for the SELECTED date
+      only, not per chip, so a longer strip costs markup and no extra requests.
+      The strip already scrolled.
+
+      They are held together by a test that reads BOTH files
+      (`frontend/src/pages/bookingWindow.test.js`) — deliberate coupling in a
+      test, where knowing about both sides is allowed, while the two packages
+      share no module. It fails on drift in either direction, and fails rather
+      than passing vacuously if the constant is renamed.
+
+      **7.1's out-of-window notice was KEPT, not removed.** Widening the strip
+      to 30 days does not make it dead code: `?date=` is a URL, and a date
+      beyond 30 days still lands there. What changed is that it is now
+      unreachable from a NOTIFICATION, since `join_waitlist` refuses a window
+      that long — so the path is rarer, not gone. Its test moved from a 20-day
+      date (now inside the window) to a 40-day one, and the notice text
+      interpolates the constant, so it reads "the 30 days" with no edit.
+
+      *The semantics, stated once:* `time_from`/`time_to` are a DAILY
+      time-of-day window applying to every date in the range, not one
+      continuous span across it. Bounds are INCLUSIVE — "between 10 and 2"
+      includes a 2 o'clock slot to the person saying it. Both NULL means the
+      whole day, which is what every row 006 wrote becomes.
+
+      **THE TRAP THIS MIGRATION WAS SHAPED AROUND, and it was verified, not
+      suspected.** `active_request` is what makes "you are already on this
+      list" a DATABASE guarantee. In MySQL `CONCAT('a', NULL)` is **NULL**, and
+      a UNIQUE index ignores NULLs entirely — so adding nullable time columns
+      to that CONCAT naively would have set the key to NULL for every whole-day
+      row and switched 006's guarantee OFF for exactly the rows that already
+      existed. Nothing would have looked broken; duplicates would simply have
+      started being accepted.
+
+      Proved side by side on two throwaway tables: the naive key **accepted a
+      duplicate** and its `active_request` was `null`; the shipped key rejected
+      with `ER_DUP_ENTRY`. Every time component is `COALESCE(…, '')`, and
+      `migration007.test.js`'s first test asserts the whole-day collision
+      directly, because a comment in a `.sql` file guarantees nothing.
+
+      Also added: CHECKs that the bounds are both-or-neither (a one-sided
+      window makes `time BETWEEN x AND NULL` NULL — neither true nor false, so
+      it would quietly match nothing forever) and that `time_to >= time_from`.
+
+      **The unique key now includes the times**, so "mornings Sep 1-7" and
+      "afternoons Sep 1-7" are two legitimate requests rather than a duplicate.
+
+      **A REAL GAP THIS INCREMENT FOUND IN 5.3's CORE GUARANTEE.** The plan for
+      7.4 claimed the confirmation token "is bound to the whole argument
+      object". That was WRONG. `fingerprintOf` in `confirmations.js` hashed an
+      explicit allowlist — `doctor_id`, `date_from`, `date_to` — so 7.4's new
+      time fields fell OUTSIDE the binding: a patient could be shown
+      "mornings", agree, and have "afternoons" written against the token they
+      agreed to. A new test caught it before it shipped.
+
+      Fixed by hashing EVERY argument except `confirmation_token`, with keys
+      sorted for stability.
+
+      **The generalisable lesson: the allowlist was DEFAULT-OPEN.** A new
+      argument was outside the binding until someone remembered to add it, and
+      nothing failed while it wasn't — the guarantee just quietly covered less
+      than it claimed. The replacement is DEFAULT-CLOSED: everything is bound
+      unless explicitly excluded, and the single exclusion
+      (`confirmation_token`, absent on the preview and present on the spend) is
+      structural rather than a judgement call. A security check that has to be
+      updated by hand when the thing it guards grows is a check that will
+      eventually be out of date, and will not say so.
+
+      One cost, stated: tokens issued before the deploy become unspendable
+      after it, bounded by the 10-minute TTL.
+
+      **DEPLOY ORDER MATTERS HERE, unlike every increment before it.** The new
+      code INSERTs and SELECTs `time_from`/`time_to`, so it cannot run against
+      an un-migrated database. **007 must be applied to Aiven BEFORE the code
+      goes live**, not after — see Production state. The reverse order is a
+      broken waitlist, not a degraded one.
+
+      **Verification.** 41 new tests (backend 335, frontend 70) and **9
+      mutations, all caught** — including the one that reverts the confirmation
+      fingerprint, which is what proves that fix is load-bearing. End to end
+      against the real database: a patient waitlisted 10:00-12:00 was told
+      NOTHING about a 19:30 cancellation and told exactly once about a 10:30
+      one, while a whole-day waiter heard about both — and 7.2's unread-dedupe
+      correctly suppressed the whole-day waiter's second notice.
 
 - [ ] **7.5** **Waitlist aware of existing appointments** — the capstone.
       **Depends on 7.3 and 7.4; comes after both.**

@@ -348,4 +348,9 @@ export {
   // drift on something as small as the zero-padded hour, and the preselection
   // would stop working with nothing to show for it.
   convertTo12Hour,
+  // Exported for 7.4. The waitlist stores TIME columns and the notifier
+  // matches against them in SQL, but 7.2 normalises the freed time to a
+  // display label on its way to the payload — so it has to come back. Both
+  // directions live in this file so they cannot drift apart.
+  convertTo24Hour,
 };

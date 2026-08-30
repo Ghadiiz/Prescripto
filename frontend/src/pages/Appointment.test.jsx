@@ -123,11 +123,13 @@ describe('Appointment date selection', () => {
   });
 
   it('falls back to today and says so when the date is beyond the window', async () => {
-    const wanted = daysFromToday(20);
+    // Past 30 days now: 7.4 widened the strip to match the waitlist window, so
+    // the old fixture date (20 days out) is inside it and would preselect.
+    const wanted = daysFromToday(40);
     renderAt(`?date=${wanted}`);
 
     await waitFor(() =>
-      expect(screen.getByText(/further ahead than the 7 days/i)).toBeInTheDocument(),
+      expect(screen.getByText(/further ahead than the 30 days/i)).toBeInTheDocument(),
     );
     expect(requestedSlotDates()).toContain(daysFromToday(0));
   });

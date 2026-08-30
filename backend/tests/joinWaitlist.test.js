@@ -6,6 +6,7 @@ import { closeRedis } from '../src/config/redis.js';
 import { connectDB, getDB } from '../src/config/mysql.js';
 import { runTool } from '../src/assistant/runTool.js';
 import { resetConfirmations } from '../src/assistant/confirmations.js';
+import joinWaitlist from '../src/assistant/tools/joinWaitlist.js';
 
 // The only write tool.
 //
@@ -253,6 +254,27 @@ test('bad requests are refused at the preview, minting no token', async () => {
       'range_too_long',
     ],
     [{ doctor_id: 99999999, date_from: FROM, date_to: TO }, 'doctor_not_found'],
+    // 7.4. Both bounds or neither: a one-sided window cannot be matched
+    // against, and the database CHECKs it too — but a refusal the model can
+    // read beats a constraint violation thrown after the patient confirmed.
+    [
+      { doctor_id: doctorId, date_from: FROM, date_to: TO, time_from: '10:00' },
+      'time_range_incomplete',
+    ],
+    [
+      { doctor_id: doctorId, date_from: FROM, date_to: TO, time_to: '12:00' },
+      'time_range_incomplete',
+    ],
+    [
+      {
+        doctor_id: doctorId,
+        date_from: FROM,
+        date_to: TO,
+        time_from: '17:00',
+        time_to: '09:00',
+      },
+      'time_range_reversed',
+    ],
   ];
 
   for (const [args, reason] of cases) {
@@ -262,6 +284,136 @@ test('bad requests are refused at the preview, minting no token', async () => {
   }
 
   assert.equal(await countWaitlist(), 0);
+});
+
+// --- 7.4: the time window ----------------------------------------------------
+
+test('the requested hours reach the row', async () => {
+  const ctx = ctxFor(patientA);
+  const args = {
+    doctor_id: doctorId,
+    date_from: FROM,
+    date_to: TO,
+    time_from: '10:00',
+    time_to: '12:00',
+  };
+
+  const preview = await join(ctx, args);
+  assert.equal(preview.summary.time_from, '10:00');
+  assert.equal(preview.summary.time_to, '12:00');
+
+  await join(ctx, { ...args, confirmation_token: preview.confirmation_token });
+
+  const [[row]] = await db.query(
+    'SELECT time_from, time_to FROM waitlist WHERE user_id = ?',
+    [patientA],
+  );
+
+  // MySQL hands TIME back as HH:MM:SS.
+  assert.equal(row.time_from, '10:00:00');
+  assert.equal(row.time_to, '12:00:00');
+});
+
+test('a request with no hours still writes a whole-day row', async () => {
+  const ctx = ctxFor(patientA);
+  const args = { doctor_id: doctorId, date_from: FROM, date_to: TO };
+
+  const preview = await join(ctx, args);
+  assert.equal(preview.summary.time_from, null);
+
+  await join(ctx, { ...args, confirmation_token: preview.confirmation_token });
+
+  const [[row]] = await db.query(
+    'SELECT time_from, time_to FROM waitlist WHERE user_id = ?',
+    [patientA],
+  );
+  assert.equal(row.time_from, null);
+  assert.equal(row.time_to, null);
+});
+
+test('confirming a MORNING request cannot write an afternoon one', async () => {
+  // The token is bound to the whole argument object, so 7.4's new fields are
+  // covered by 5.3's guarantee without any change to it. Worth asserting: the
+  // hours are the part a patient is most likely to be shown and agree to.
+  const ctx = ctxFor(patientA);
+  const morning = {
+    doctor_id: doctorId,
+    date_from: FROM,
+    date_to: TO,
+    time_from: '10:00',
+    time_to: '12:00',
+  };
+
+  const preview = await join(ctx, morning);
+
+  const result = await join(ctx, {
+    ...morning,
+    time_from: '14:00',
+    time_to: '17:00',
+    confirmation_token: preview.confirmation_token,
+  });
+
+  assert.equal(result.reason, 'confirmation_invalid');
+  assert.equal(await countWaitlist(), 0);
+});
+
+test('mornings and afternoons are two requests, not a duplicate', async () => {
+  const ctx = ctxFor(patientA);
+  const base = { doctor_id: doctorId, date_from: FROM, date_to: TO };
+
+  for (const times of [
+    { time_from: '10:00', time_to: '12:00' },
+    { time_from: '14:00', time_to: '17:00' },
+  ]) {
+    const args = { ...base, ...times };
+    const preview = await join(ctx, args);
+    const result = await join(ctx, {
+      ...args,
+      confirmation_token: preview.confirmation_token,
+    });
+    assert.equal(result.status, 'joined', JSON.stringify(times));
+  }
+
+  assert.equal(await countWaitlist(), 2);
+});
+
+test('the SAME hours twice reports already_waiting', async () => {
+  const ctx = ctxFor(patientA);
+  const args = {
+    doctor_id: doctorId,
+    date_from: FROM,
+    date_to: TO,
+    time_from: '10:00',
+    time_to: '12:00',
+  };
+
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    const preview = await join(ctx, args);
+    const result = await join(ctx, {
+      ...args,
+      confirmation_token: preview.confirmation_token,
+    });
+
+    if (attempt === 1) {
+      assert.equal(result.status, 'already_waiting');
+      assert.match(result.message, /dates and hours/);
+    }
+  }
+
+  assert.equal(await countWaitlist(), 1);
+});
+
+test('a time that is not a time is rejected by the schema', async () => {
+  for (const bad of ['10am', '25:00', '10:60', '10:00:00', 'morning']) {
+    const parsed = joinWaitlist.schema.safeParse({
+      doctor_id: doctorId,
+      date_from: FROM,
+      date_to: TO,
+      time_from: bad,
+      time_to: '12:00',
+    });
+    assert.equal(parsed.success, false, `${bad} was accepted`);
+  }
 });
 
 test('an identity argument is rejected by the schema, not ignored', async () => {

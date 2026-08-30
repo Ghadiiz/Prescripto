@@ -10,17 +10,29 @@ import { getDB } from '../../config/mysql.js';
 // equality on the first two columns, the range last. That index was created
 // for this query specifically, and a test asserts EXPLAIN still picks it —
 // this runs inside a cancellation, which a patient is waiting on.
-export const findActiveWaitlistForSlot = async (doctorId, date) => {
+export const findActiveWaitlistForSlot = async (doctorId, date, time = null) => {
   const db = getDB();
 
+  // 7.4 added the time predicate. Two ways a row still matches without one:
+  //
+  //   `time_from IS NULL` — a whole-day request, which is every row 006 wrote
+  //   and every request that names no hours.
+  //
+  //   `? IS NULL` — the freed time is unknown, which happens for a job
+  //   enqueued before 7.2. Matching everything is the right answer there: the
+  //   slot did open, and the alternative is telling nobody.
+  //
+  // BETWEEN is inclusive at both ends, deliberately. "Between 10 and 2"
+  // includes a 2 o'clock slot to the person who said it.
   const [rows] = await db.query(
-    `SELECT id, user_id, date_from, date_to
+    `SELECT id, user_id, date_from, date_to, time_from, time_to
        FROM waitlist
       WHERE doctor_id = ?
         AND status = 'active'
         AND date_from <= ?
-        AND date_to >= ?`,
-    [doctorId, date, date],
+        AND date_to >= ?
+        AND (? IS NULL OR time_from IS NULL OR ? BETWEEN time_from AND time_to)`,
+    [doctorId, date, date, time, time],
   );
 
   return rows;

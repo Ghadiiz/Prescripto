@@ -61,10 +61,22 @@ const bookAppointment = async (userId, doctorIdArg = doctorId, date = SLOT_DATE)
   return result.insertId;
 };
 
-const addWaitlist = async (userId, { from = WINDOW_FROM, to = WINDOW_TO, status = 'active', doctor = doctorId } = {}) => {
+const addWaitlist = async (
+  userId,
+  {
+    from = WINDOW_FROM,
+    to = WINDOW_TO,
+    status = 'active',
+    doctor = doctorId,
+    // 7.4. Null means the whole day, which is what every row meant before.
+    timeFrom = null,
+    timeTo = null,
+  } = {},
+) => {
   const [result] = await db.query(
-    'INSERT INTO waitlist (user_id, doctor_id, date_from, date_to, status) VALUES (?, ?, ?, ?, ?)',
-    [userId, doctor, from, to, status],
+    `INSERT INTO waitlist (user_id, doctor_id, date_from, date_to, time_from, time_to, status)
+     VALUES (?, ?, ?, ?, ?, ?, ?)`,
+    [userId, doctor, from, to, timeFrom, timeTo, status],
   );
   return result.insertId;
 };
@@ -397,6 +409,117 @@ test('a time that is not a time is dropped rather than rendered', async () => {
   const [{ payload }] = await notificationsFor(waiter);
 
   assert.ok(!('slot_time' in payload));
+});
+
+// --- 7.4: the time window ----------------------------------------------------
+
+test('a morning-only window is NOT told about an evening cancellation', async () => {
+  await addWaitlist(waiter, { timeFrom: '10:00:00', timeTo: '12:00:00' });
+
+  await notifyWaitlistForFreedSlot({
+    doctorId,
+    date: SLOT_DATE,
+    time: '19:30:00',
+  });
+
+  assert.equal(
+    (await notificationsFor(waiter)).length,
+    0,
+    'the freed slot is outside the hours they asked for',
+  );
+});
+
+test('a morning-only window IS told about a morning cancellation', async () => {
+  await addWaitlist(waiter, { timeFrom: '10:00:00', timeTo: '12:00:00' });
+
+  await notifyWaitlistForFreedSlot({
+    doctorId,
+    date: SLOT_DATE,
+    time: '10:30:00',
+  });
+
+  const [{ payload }] = await notificationsFor(waiter);
+  assert.equal(payload.slot_time, '10:30 AM');
+});
+
+test('the window is INCLUSIVE at both ends', async () => {
+  // "Between 10 and 12" includes a 12 o'clock slot to the person who said it.
+  await addWaitlist(waiter, { timeFrom: '10:00:00', timeTo: '12:00:00' });
+
+  await notifyWaitlistForFreedSlot({
+    doctorId,
+    date: SLOT_DATE,
+    time: '12:00:00',
+  });
+
+  assert.equal((await notificationsFor(waiter)).length, 1);
+});
+
+test('a slot one half-hour past the end is not a match', async () => {
+  await addWaitlist(waiter, { timeFrom: '10:00:00', timeTo: '12:00:00' });
+
+  await notifyWaitlistForFreedSlot({
+    doctorId,
+    date: SLOT_DATE,
+    time: '12:30:00',
+  });
+
+  assert.equal((await notificationsFor(waiter)).length, 0);
+});
+
+test('a whole-day window still matches any hour', async () => {
+  await addWaitlist(waiter);
+
+  await notifyWaitlistForFreedSlot({
+    doctorId,
+    date: SLOT_DATE,
+    time: '20:30:00',
+  });
+
+  assert.equal((await notificationsFor(waiter)).length, 1);
+});
+
+test('a job carrying NO time still notifies a timed window', async () => {
+  // The deploy straddle: a job enqueued before 7.2 has no time at all. The
+  // slot did open, so telling nobody would be the wrong answer.
+  await addWaitlist(waiter, { timeFrom: '10:00:00', timeTo: '12:00:00' });
+
+  await notifyWaitlistForFreedSlot({ doctorId, date: SLOT_DATE });
+
+  assert.equal((await notificationsFor(waiter)).length, 1);
+});
+
+test('the freed time is matched after coming back from its display label', async () => {
+  // 7.2 normalises to '02:30 PM' on the way to the payload; 7.4 has to turn
+  // that back into '14:30:00' to compare against TIME columns. A label that
+  // failed to convert would silently match nothing.
+  await addWaitlist(waiter, { timeFrom: '14:00:00', timeTo: '15:00:00' });
+
+  await notifyWaitlistForFreedSlot({
+    doctorId,
+    date: SLOT_DATE,
+    time: '02:30 PM',
+  });
+
+  const [{ payload }] = await notificationsFor(waiter);
+  assert.equal(payload.slot_time, '02:30 PM');
+});
+
+test('one patient with a morning AND an afternoon window is told once', async () => {
+  await addWaitlist(waiter, { timeFrom: '10:00:00', timeTo: '12:00:00' });
+  await addWaitlist(waiter, { timeFrom: '14:00:00', timeTo: '17:00:00' });
+
+  await notifyWaitlistForFreedSlot({
+    doctorId,
+    date: SLOT_DATE,
+    time: '10:30:00',
+  });
+
+  assert.equal(
+    (await notificationsFor(waiter)).length,
+    1,
+    'grouping is per patient, however many of their windows match',
+  );
 });
 
 test('the waitlist match uses idx_match rather than scanning', async () => {

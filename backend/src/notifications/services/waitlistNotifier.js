@@ -8,7 +8,10 @@ import { sanitizeAdminText } from '../../assistant/guardrails/sanitize.js';
 import { NOTIFICATION_TYPE } from '../../constants/notificationTypes.js';
 import { isBeforeToday } from '../../assistant/tools/dates.js';
 import { enqueueWaitlistNotification } from '../../queue/waitlistQueue.js';
-import { convertTo12Hour } from '../../appointments/services/appointmentService.js';
+import {
+  convertTo12Hour,
+  convertTo24Hour,
+} from '../../appointments/services/appointmentService.js';
 
 // Turns a freed slot into notifications.
 //
@@ -58,11 +61,19 @@ export const notifyWaitlistForFreedSlot = async ({
 }) => {
   const freedDate = toDateString(date);
   const freedTime = toSlotTime(time);
+  // 7.4 matches against TIME columns, so the label goes back to 24-hour form.
+  // Null when the job carried no time — the matcher then falls back to
+  // matching every waiting row, as it did before 7.2.
+  const freedTime24 = freedTime ? convertTo24Hour(freedTime) : null;
 
   // Cancelling last week's appointment frees nothing anyone can book.
   if (isBeforeToday(freedDate)) return { notified: 0, reason: 'date_in_past' };
 
-  const waiting = await findActiveWaitlistForSlot(doctorId, freedDate);
+  const waiting = await findActiveWaitlistForSlot(
+    doctorId,
+    freedDate,
+    freedTime24,
+  );
 
   // One notification per PATIENT, not per waitlist row. A patient may hold two
   // overlapping windows — Sep 1-7 and Sep 5-10 both cover Sep 6 — because

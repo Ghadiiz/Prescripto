@@ -7,10 +7,17 @@ import { isCalendarDate, isSlotTime, toLocalDateString } from '../utils/dates';
 import axios from 'axios';
 import { toast } from 'react-toastify';
 
-// How many days ahead the strip offers. A notification can name a date beyond
-// this — a waitlist window may start any day from today and span up to 30 —
-// so the out-of-window case below is reachable, not defensive.
-const BOOKABLE_DAYS = 7;
+// How many days ahead the strip offers.
+//
+// MUST EQUAL `MAX_WINDOW_DAYS` in backend/src/assistant/tools/joinWaitlist.js.
+// Until 7.4 these were 7 and 30 — two independent numbers that disagreed, so a
+// patient could be waitlisted for, and notified about, a date this page would
+// not show them. 7.1 could only paper over that with a notice; 7.4 made them
+// one number, and a test reads both files and fails if they drift apart again.
+//
+// The strip already scrolls horizontally and only the SELECTED date fetches
+// slots, so the extra days cost markup and nothing else.
+export const BOOKABLE_DAYS = 30;
 
 const Appointment = () => {
   const { docId } = useParams();

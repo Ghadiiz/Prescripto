@@ -31,21 +31,32 @@ const pending = new Map();
 //
 // `userId` in here is what stops a token minted for one patient being spent by
 // another — the difference between a confirmation and a capability anyone can
-// pick up. The arguments are included so the doctor or the dates cannot be
-// swapped between the preview a patient agreed to and the write that follows.
-const fingerprintOf = (ctx, sessionId, args) =>
-  createHash('sha256')
-    .update(
-      JSON.stringify([
-        ctx.userId,
-        ctx.role,
-        sessionId,
-        args.doctor_id,
-        args.date_from,
-        args.date_to,
-      ]),
-    )
+// pick up. The arguments are included so nothing can be swapped between the
+// preview a patient agreed to and the write that follows.
+//
+// EVERY argument, not a named few. This listed `doctor_id`, `date_from` and
+// `date_to` explicitly until 7.4, which added `time_from`/`time_to` — and an
+// allowlist does not fail loudly when the tool grows. It silently stops
+// covering the new field, so a patient could be shown "mornings" and have
+// "afternoons" written against the token they agreed to. A test caught it;
+// hashing everything means the next argument is covered on the day it is added
+// rather than the day someone remembers this function exists.
+//
+// `confirmation_token` is excluded because it is absent on the preview and
+// present on the spend — including it would mean no token ever matched. Keys
+// are sorted so two objects with the same contents hash the same however they
+// were built.
+const fingerprintOf = (ctx, sessionId, args) => {
+  const { confirmation_token: _token, ...bound } = args ?? {};
+
+  const stable = Object.keys(bound)
+    .sort()
+    .map((key) => [key, bound[key]]);
+
+  return createHash('sha256')
+    .update(JSON.stringify([ctx.userId, ctx.role, sessionId, stable]))
     .digest('hex');
+};
 
 const keyFor = (token) => `${KEY_PREFIX}confirm:${token}`;
 

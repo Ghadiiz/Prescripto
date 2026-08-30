@@ -27,6 +27,10 @@ const DATE = z
   .string()
   .regex(/^\d{4}-\d{2}-\d{2}$/, 'date must be YYYY-MM-DD');
 
+const TIME = z
+  .string()
+  .regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'time must be HH:MM on a 24-hour clock');
+
 // `.strict()`: an unknown key fails the parse, so a smuggled user_id is
 // rejected before the handler runs rather than being quietly ignored.
 const schema = z
@@ -34,11 +38,18 @@ const schema = z
     doctor_id: z.number().int().positive(),
     date_from: DATE,
     date_to: DATE,
+    // 7.4. Optional, and both or neither. They describe hours WITHIN each day
+    // of the range, not one continuous span across it.
+    time_from: TIME.optional(),
+    time_to: TIME.optional(),
     // Absent on the first call. Present only on the second, and only if the
     // first one issued it.
     confirmation_token: z.string().min(1).optional(),
   })
   .strict();
+
+// The TIME columns want seconds; the model gives 'HH:MM'.
+const toSqlTime = (value) => (value ? `${value}:00` : null);
 
 const refuse = (reason, message) => ({ status: 'refused', reason, message });
 
@@ -52,12 +63,22 @@ export default {
     'would be recorded — nothing is written by that call. Show the patient ' +
     'that summary, ask them to confirm in their own words, and only then call ' +
     'again with the confirmation_token you were given. Dates are YYYY-MM-DD, ' +
-    `must not be in the past, and may span at most ${MAX_WINDOW_DAYS} days.`,
+    `must not be in the past, and may span at most ${MAX_WINDOW_DAYS} days. ` +
+    'If the patient only wants certain hours — mornings, or after work — pass ' +
+    'time_from and time_to as HH:MM on a 24-hour clock. They apply to every ' +
+    'day in the range, both ends included, and must be given together. Leave ' +
+    'them out to be told about any time of day.',
   schema,
   mutates: true,
 
   handler: async (ctx, args, { sessionId } = {}) => {
-    const { doctor_id: doctorId, date_from: dateFrom, date_to: dateTo } = args;
+    const {
+      doctor_id: doctorId,
+      date_from: dateFrom,
+      date_to: dateTo,
+      time_from: timeFrom,
+      time_to: timeTo,
+    } = args;
 
     // The guard my_appointments has, on the one tool that WRITES.
     //
@@ -96,6 +117,26 @@ export default {
       );
     }
 
+    // Both bounds or neither. The database CHECKs this too, but a refusal the
+    // model can read and fix beats an ER_CHECK_CONSTRAINT_VIOLATED thrown at
+    // it after the patient has already confirmed.
+    if (Boolean(timeFrom) !== Boolean(timeTo)) {
+      return refuse(
+        'time_range_incomplete',
+        'Give both time_from and time_to, or neither. A one-sided window ' +
+          'cannot be matched against.',
+      );
+    }
+
+    if (timeFrom && timeTo < timeFrom) {
+      // String comparison is exact for zero-padded HH:MM, which the schema
+      // already guarantees.
+      return refuse(
+        'time_range_reversed',
+        'The end time falls before the start time.',
+      );
+    }
+
     const doctor = await getDoctorById(doctorId);
 
     if (!doctor) {
@@ -116,6 +157,11 @@ export default {
       doctor_name: sanitizeAdminText({ name: doctor.name }).name,
       date_from: dateFrom,
       date_to: dateTo,
+      // Present so the patient confirms the HOURS as well as the dates. The
+      // confirmation token is bound to the whole argument object, so agreeing
+      // to mornings cannot write an afternoon request.
+      time_from: timeFrom ?? null,
+      time_to: timeTo ?? null,
     };
 
     // --- phase one: nothing is written -------------------------------------
@@ -151,6 +197,8 @@ export default {
         doctorId,
         dateFrom,
         dateTo,
+        toSqlTime(timeFrom),
+        toSqlTime(timeTo),
       );
 
       return { status: 'joined', waitlist_id: waitlistId, ...summary };
@@ -162,7 +210,9 @@ export default {
         return {
           status: 'already_waiting',
           ...summary,
-          message: 'They are already on this waitlist for those dates.',
+          message: timeFrom
+            ? 'They are already on this waitlist for those dates and hours.'
+            : 'They are already on this waitlist for those dates.',
         };
       }
 
