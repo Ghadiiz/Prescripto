@@ -22,34 +22,15 @@ Which migrations have been applied to the **Aiven production database**. Local
 and production are migrated separately — `npm run migrate` from a dev machine
 hits whatever `backend/.env` points at, which is normally local MySQL.
 
-**001–006 are applied** — 001–004 on 2026-08-16, 005 on 2026-08-19, 006 on
-2026-08-24. The `schema_migrations` ledger on Aiven holds those six rows, so
+**All eight migrations are applied** — 001–004 on 2026-08-16, 005 on
+2026-08-19, 006 on 2026-08-24, 007 before the Phase 7 go-live, and 008 during
+8.1. The `schema_migrations` ledger on Aiven holds all eight rows, so
 re-running the runner there is a no-op — and **do not re-apply any of them by
 hand**: the `ALTER`/`CREATE` statements would fail on duplicate columns, tables
 and keys.
 
-> ### PENDING: 007_waitlist_time_window.sql
->
-> **Not yet applied to Aiven.** Written and applied locally in 7.4.
->
-> **This one has a deploy ORDER, unlike every migration before it.** 7.4's code
-> INSERTs and SELECTs `waitlist.time_from` / `time_to`, so it cannot run
-> against an un-migrated database: the waitlist write and the notifier's match
-> would both fail on unknown columns. **Apply 007 to Aiven BEFORE merging Phase
-> 7 to `main`**, not after. The reverse order is a broken waitlist, not a
-> degraded one.
->
-> It is the first migration to run against a table that HOLDS PRODUCTION ROWS —
-> 006's two tables were new and empty. It drops and rebuilds the
-> `active_request` generated column and its unique key, so between those
-> statements the duplicate guarantee is briefly absent. Take a fresh backup
-> first, as with 005.
->
-> Afterwards, verify as 005 and 006 were: `SHOW INDEXES` for
-> `unique_active_request` (`Non_unique = 0`), and confirm the rebuilt column
-> carries **COALESCE** on both time components — without it the key goes NULL
-> for every existing whole-day row and the uniqueness guarantee silently
-> switches off. That is the trap 7.4 was shaped around.
+**Nothing is pending.**
+
 
 - **001_doctors_profile_fields.sql** — `experience_years`, `languages` and
   `gender` on `doctors`; the backfill converted the `experience` strings to
@@ -90,6 +71,37 @@ and keys.
   Applied 2026-08-24 after a fresh backup. **No duplicate pre-check was
   needed**, unlike 005: both tables are new, so there were no existing rows for
   the unique key or the CHECK to reject on the way in.
+
+- **007_waitlist_time_window.sql** — `waitlist.time_from` / `time_to`, the
+  rebuilt `active_request` generated column and its unique key, and the two new
+  CHECK constraints. **Applied before the Phase 7 merge**, which was a
+  requirement rather than a preference: 7.4's code INSERTs and SELECTs those
+  columns, so the reverse order would have been a broken waitlist rather than a
+  degraded one.
+
+  **The first migration to run against a table holding PRODUCTION ROWS** — 006's
+  two tables were new and empty. It drops and rebuilds a generated column and
+  its unique key, so between those statements the duplicate guarantee is
+  briefly absent, which is why it took a fresh backup first.
+
+  The thing to have verified afterwards, and the trap the whole migration was
+  shaped around: that the rebuilt column carries **COALESCE** on both time
+  components. Without it `active_request` goes NULL for every pre-existing
+  whole-day row, and since UNIQUE ignores NULLs the "already on this list"
+  guarantee switches off silently for exactly the rows that existed before.
+
+- **008_platform_docs.sql** — the `platform_docs` table for Phase 8's RAG
+  corpus, verified on Aiven: `slug` UNIQUE, and `embedding` /
+  `embedding_model` / `embedding_dim` all NOT NULL.
+
+  **No deploy order**, unlike 007. It creates a brand-new table that nothing
+  reads until 8.3 ships a tool, and it touches no existing table — so there was
+  no generated column to rebuild and no window where an existing guarantee was
+  briefly absent. The two things that made 007 delicate are both absent here.
+
+  `unique_slug` is the one worth having verified: it is what makes 8.2's
+  ingestion idempotent, and without it re-running the script duplicates every
+  passage silently. The table is **empty until 8.2 writes to it**.
 
   Both tables are **empty and stay empty until 5.2's notification writes and
   5.3's `join_waitlist` ship** — the same position `conversations` and
@@ -2297,9 +2309,58 @@ corpus a channel into the instruction stream.
 
 ### Increments
 
-- [ ] **8.1** Migration: `platform_docs` (id, title, content, embedding as
+- [x] **8.1** Migration: `platform_docs` (id, title, content, embedding as
       JSON/TEXT, source/metadata). A new Aiven migration (**008**), applied by
       hand exactly as 007 was — backup first, apply, then verify.
+
+      **Measured before designing the column, not assumed.** One call to the
+      embedding API with the existing key: `gemini-embedding-001` returns
+      **3072** dimensions by default, and honours `outputDimensionality: 768`
+      with the same leading values. A 768-float vector is ~9.2 KB as JSON;
+      3072 would be ~37 KB, so a query loading fifteen rows reads ~140 KB
+      versus ~550 KB. **The schema is dimension-agnostic**, so 8.2 chooses
+      freely — 768 is the recommendation, and re-embedding fifteen documents
+      to change it later costs nothing.
+
+      *Three columns beyond the ones specified, each earning its place:*
+
+      - **`slug` UNIQUE.** 8.2's script will run every time the prose is
+        edited, and without a key to upsert on, each run appends a second copy
+        of every passage — retrieval then returns a document alongside its own
+        duplicate, and nothing looks broken. With it, re-ingestion is
+        idempotent **by database guarantee**, the same device `active_slot` and
+        `active_request` use.
+      - **`embedding_model` and `embedding_dim`.** Cosine similarity between
+        vectors from two different models is not an error — it is a number.
+        Nothing throws, nothing logs, and the rankings quietly become noise.
+        Recording what produced each vector lets 8.3 refuse the comparison
+        instead of returning bad passages confidently. The dimension is stored
+        rather than fixed in the column type, which is what keeps 8.2 free.
+      - **`embedding JSON NOT NULL`.** A row that exists but cannot be searched
+        is a state 8.3 would have to defend against on every query forever, and
+        the ingestion script holds content and vector at the same moment — so
+        the half-written row is simply not permitted.
+
+      `schema.sql` is untouched, as CLAUDE.md requires: it holds only the four
+      baseline tables, and a fresh boot would otherwise create this one and the
+      migration would fail as a duplicate.
+
+      **Verification.** Applied locally; `SHOW CREATE TABLE` confirms every
+      type, the unique key and the NOT NULLs. `migration008.test.js` proves the
+      constraints against the real database (9 tests) — including **the
+      assumption the whole phase rests on: that a float array round-trips
+      exactly**, tested at both 768 and 3072 dimensions and with the small
+      signed values real embeddings actually contain (-0.008249, 0.003413,
+      0.026227 were the measured ones). If a vector came back altered, 8.3
+      would score garbage silently, because a wrong number is still a number.
+
+      **Three mutations, all caught** — and since the migration was already
+      applied and so could not be mutated as a file, they were applied to the
+      LIVE local table: dropping the unique slug, making the embedding
+      nullable, making the model nullable. The schema was then confirmed
+      byte-identical afterwards via `information_schema` (the only difference
+      `SHOW CREATE TABLE` reported was the AUTO_INCREMENT counter, which is not
+      a column definition). Backend suite 353 tests, 348 pass, 0 fail.
 - [ ] **8.2** Content authoring and embedding ingestion. The ~10–15 passages
       above are written, embedded with `gemini-embedding-001`, and stored.
       **The passages are authored by Ghadi** — his content about his own
