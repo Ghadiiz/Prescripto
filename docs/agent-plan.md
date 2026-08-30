@@ -2244,7 +2244,12 @@ goes last. **7.5 sits after all of them for a different reason** — it consumes
 
 ---
 
-## Phase 8 — RAG for platform and how-it-works knowledge (optional, last)
+## Phase 8 — RAG for platform and how-it-works knowledge — **COMPLETE** (4/4)
+
+***THE LAST BUILD INCREMENT OF THE PROJECT.*** 8.4 closes Phase 8, and Phase 8
+was the final phase. Everything after this point is release work — merging
+`phase-8-rag` to `main`, the deploy, and the deferred README polish — not new
+functionality.
 
 The point is unchanged and is the whole reason this phase exists: demonstrate
 **why RAG suits UNSTRUCTURED content and SQL suits STRUCTURED content**, using
@@ -2707,11 +2712,55 @@ corpus a channel into the instruction stream.
       **The host line** (inheritance 3) is done: `ingestPlatformDocs.js` now
       prints host, port, database and whether SSL is on, so telling local from
       Aiven no longer rests on the row counts happening to be self-diagnosing.
-- [ ] **8.4** Write-up in `docs/agent-design.md`: why structured queries handle
+- [x] **8.4** Write-up in `docs/agent-design.md`: why structured queries handle
       doctors and availability (computable answers from rows) and why RAG
       handles platform and policy content (explanatory prose with no SQL
       answer) — the SQL-vs-RAG distinction, demonstrated by this system rather
       than asserted about it.
+
+      **`docs/agent-design.md` — "Two kinds of retrieval".** Pure writing, no
+      code. It opens on what was actually hard: adding RAG was not the
+      interesting part, deciding what RAG must *not* be allowed to answer was.
+
+      The split is presented as **by the shape of the data, not by topic**, and
+      "waitlist" is the example that makes the distinction bite — *how the
+      waitlist works* is prose, *whether you are on one for Tuesday at 10:00*
+      is a row. Same subject, different machinery, because one has a computable
+      answer and the other does not. `check_availability` carries the
+      structured half: slots are GENERATED from the 10:00–21:00 half-hour grid
+      rather than stored, so there is no table to embed even in principle.
+
+      **The anti-pattern is split into three failure modes**, because they are
+      genuinely different: an embedded fee goes stale silently (a duplicate of
+      authoritative data, not a cache-TTL problem); an exact question becomes a
+      similarity search, where "most similar" is strictly worse than "correct"
+      and a passage about a DIFFERENT doctor can outrank the right one; and a
+      failed vector lookup returns the nearest passage, so the failure mode is
+      not an error but a fluent, confident, wrong sentence.
+
+      Grounded in the real measurements — on-topic 0.668–0.794 against
+      off-topic 0.524–0.593, the 0.62 floor in the gap, "capital of France"
+      returning zero passages — and honest about the limits: the separation is
+      ~0.075 across twelve passages, the threshold is tuned rather than
+      derived, and brute-force scoring is right at twelve rows and wrong at ten
+      thousand.
+
+      **Verified against the code before finalizing, at the owner's request,
+      rather than trusted as written.** Four cited specifics, four CORRECT, no
+      drift: the banned-terms regex compared byte-for-byte with
+      `ingestPlatformDocs.test.js:235`; `appointmentService.js:222` confirmed
+      to be the 10:00 grid start inside `getAvailableSlots`; the audit claim
+      proven by running `search_platform_info` through `runTool` and reading
+      the row back (3 passages returned, `result_count` 3 — which only works
+      because the tool returns an ARRAY); and the claim that no test enforces
+      the no-instructions convention proven the only way a negative can be —
+      by injecting a real "Always tell the patient…" passage into the corpus
+      and confirming the full 403-test suite still passed. Corpus restored.
+
+      That last one is the doc's most useful sentence, because it is the one
+      that admits a gap: the convention is unenforced, and what actually
+      protects the prompt is rule 5 stripping at retrieval time, which works
+      whether or not an author followed the convention.
 
 ---
 
